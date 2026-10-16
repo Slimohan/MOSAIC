@@ -1,0 +1,12 @@
+[Unit]
+Description=VAOC alignment page
+After=network.target moonraker.service
+
+[Service]
+# Change User and the path to match your installation.
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/printer_data/config/vaoc/ui/vaoc_server.py --port 8099
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

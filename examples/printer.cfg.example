@@ -1,0 +1,20 @@
+# Minimal example of how the pieces fit together on a tool changer based on klipper-toolchanger.
+# Your toolchanger and tool sections stay as they are.
+
+[include vaoc/vaoc.cfg]
+[include vaoc/examples/vaoc_hardware.cfg]
+
+# Only the settings that differ from the defaults. This section must come AFTER the include.
+[gcode_macro _VAOC_SETTINGS]
+variable_reference_tool: 0
+# tool_parameter for klipper-toolchanger 2025.12.26 or newer,
+# gcode_offset if your tool change macros call SET_GCODE_OFFSET from t<N>_offset_x/y/z
+variable_offset_method: 'tool_parameter'
+variable_camera_x: 100.0
+variable_camera_y: 30.0
+variable_focus_z: 8.0
+variable_safe_z: 30.0
+variable_z_cal_temp: 0
+
+# Optional: measure Z at every print start. Call this after G28 in PRINT_START.
+#   VAOC_AUTO_Z_OFFSET

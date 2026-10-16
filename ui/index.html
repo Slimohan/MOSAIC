@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VAOC alignment</title>
+<style>
+  :root { --bg:#14171a; --fg:#e8eaed; --mute:#9aa0a6; --card:#1f2428; --line:#3a4046; --acc:#4da3ff; --ok:#3ecf6e; --bad:#ff5d5d; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f4f5f7; --fg:#1b1f23; --mute:#5b636b; --card:#fff; --line:#d0d5da; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:960px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns:1fr; }
+  @media (min-width:860px) { main { grid-template-columns: 1.3fr 1fr; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  h1 { font-size:18px; margin:0 0 4px; } h2 { font-size:14px; margin:0 0 10px; color:var(--mute); text-transform:uppercase; letter-spacing:.04em; }
+  .view { position:relative; background:#000; aspect-ratio:4/3; border-radius:8px; overflow:hidden; cursor:crosshair; }
+  .view img { width:100%; height:100%; object-fit:contain; display:block; }
+  .cross { position:absolute; inset:0; pointer-events:none; }
+  .cross::before, .cross::after { content:""; position:absolute; background:#ff3b3b; }
+  .cross::before { left:50%; top:0; bottom:0; width:1px; }
+  .cross::after { top:50%; left:0; right:0; height:1px; }
+  .ring { position:absolute; left:50%; top:50%; width:22%; aspect-ratio:1; transform:translate(-50%,-50%); border:1px solid #ff3b3b; border-radius:50%; pointer-events:none; }
+  button { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button:hover { border-color:var(--acc); } button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#04121f; font-weight:600; }
+  button.warn { border-color:var(--bad); }
+  .pad { display:grid; grid-template-columns:repeat(3,56px); gap:6px; justify-content:center; margin:8px 0; }
+  .pad button { padding:12px 0; font-size:18px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  label { color:var(--mute); font-size:13px; }
+  select, input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  input[type=text], input[type=number] { width:110px; }
+  #status { font-size:13px; color:var(--mute); min-height:1.4em; }
+  #status.err { color:var(--bad); } #status.ok { color:var(--ok); }
+  table { border-collapse:collapse; width:100%; font-size:13px; } td, th { text-align:left; padding:3px 6px; border-bottom:1px solid var(--line); }
+  .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; border:1px solid var(--line); }
+  .pill.on { border-color:var(--ok); color:var(--ok); }
+  ol { margin:0; padding-left:20px; color:var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>VAOC alignment</h1>
+    <div id="status">Connecting...</div>
+    <div class="view" id="view" title="Click to centre the nozzle on that spot (needs pixels per mm)">
+      <img id="cam" alt="camera">
+      <div class="cross"></div><div class="ring"></div>
+    </div>
+    <div class="row">
+      <label>Camera URL <input type="text" id="camurl" style="width:260px" placeholder="auto from Moonraker"></label>
+      <label>Pixels per mm <input type="number" id="ppm" step="1" min="0" placeholder="0 = off"></label>
+      <label><input type="checkbox" id="flipx"> mirror X</label>
+      <label><input type="checkbox" id="flipy"> mirror Y</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Session</h2>
+    <div class="row">
+      <button class="primary" id="b_start">Start</button>
+      <label><input type="checkbox" id="c_reset"> reset other tools</label>
+      <button id="b_end">End</button>
+      <span class="pill" id="p_active">idle</span>
+    </div>
+    <h2>Tool</h2>
+    <div class="row" id="tools"></div>
+    <div class="row"><button class="primary" id="b_set">Nozzle is centred - save</button></div>
+
+    <h2>Move</h2>
+    <div class="row"><label>Step <select id="step">
+      <option>0.01</option><option>0.02</option><option selected>0.05</option><option>0.1</option><option>0.25</option><option>0.5</option><option>1</option>
+    </select> mm</label></div>
+    <div class="pad">
+      <span></span><button data-m="0,1,0" title="Y+ (up arrow)">&uarr;</button><span></span>
+      <button data-m="-1,0,0" title="X- (left arrow)">&larr;</button><button data-m="0,0,1" title="Z+ (Page up)">Z+</button><button data-m="1,0,0" title="X+ (right arrow)">&rarr;</button>
+      <span></span><button data-m="0,-1,0" title="Y- (down arrow)">&darr;</button><button data-m="0,0,-1" title="Z- (Page down)">Z-</button>
+    </div>
+
+    <h2>Z switch</h2>
+    <div class="row"><button id="b_z">Measure Z of all tools</button> <button id="b_zq">Switch state</button></div>
+
+    <h2>Offsets</h2>
+    <table id="offsets"><tr><td>-</td></tr></table>
+    <div class="row"><button id="b_echo">Print offsets to console</button> <button class="warn" id="b_apply">Reload saved offsets</button></div>
+    <h2>Order</h2>
+    <ol><li>Start, centre T0, save (this is the camera reference).</li><li>Pick each other tool, centre it, save.</li><li>Measure Z, then End.</li></ol>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+let busy = false, toolsKey = "";
+
+function say(msg, cls) { const s = $("status"); s.textContent = msg; s.className = cls || ""; }
+
+async function api(path, opts) {
+  const r = await fetch("/moonraker" + path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && (j.error.message || j.error)) || ("HTTP " + r.status));
+  return j;
+}
+
+async function gcode(script, label) {
+  if (busy) return;
+  busy = true; document.body.style.cursor = "progress";
+  say((label || script) + " ...");
+  try {
+    await api("/printer/gcode/script?script=" + encodeURIComponent(script), { method: "POST", body: "{}" });
+    say((label || script) + ": done", "ok");
+  } catch (e) { say(String(e.message || e), "err"); }
+  busy = false; document.body.style.cursor = ""; refresh();
+}
+
+function move(dx, dy, dz) {
+  const k = parseFloat($("step").value);
+  const fx = $("flipx").checked ? -1 : 1, fy = $("flipy").checked ? -1 : 1;
+  const f = v => (v * k).toFixed(3);
+  gcode("VAOC_MOVE X=" + f(dx * fx) + " Y=" + f(dy * fy) + " Z=" + f(dz), "Move");
+}
+
+document.querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => {
+  const [x, y, z] = b.dataset.m.split(",").map(Number); move(x, y, z);
+}));
+
+$("view").addEventListener("click", ev => {
+  const ppm = parseFloat($("ppm").value);
+  if (!(ppm > 0)) { say("Set pixels per mm to use click-to-centre.", "err"); return; }
+  const r = $("cam").getBoundingClientRect();
+  // the picture is letterboxed, so measure from the centre in screen pixels scaled to image pixels
+  const nw = $("cam").naturalWidth || r.width, nh = $("cam").naturalHeight || r.height;
+  const scale = Math.min(r.width / nw, r.height / nh) || 1;
+  const dx = (ev.clientX - (r.left + r.width / 2)) / scale / ppm;
+  const dy = -(ev.clientY - (r.top + r.height / 2)) / scale / ppm;
+  const lim = 2;
+  const c = v => Math.max(-lim, Math.min(lim, v));
+  const fx = $("flipx").checked ? -1 : 1, fy = $("flipy").checked ? -1 : 1;
+  gcode("VAOC_MOVE X=" + c(dx * fx).toFixed(3) + " Y=" + c(dy * fy).toFixed(3), "Centre on click");
+});
+
+window.addEventListener("keydown", ev => {
+  if (["INPUT", "SELECT"].includes(document.activeElement.tagName)) return;
+  const m = { ArrowUp: [0, 1, 0], ArrowDown: [0, -1, 0], ArrowLeft: [-1, 0, 0], ArrowRight: [1, 0, 0], PageUp: [0, 0, 1], PageDown: [0, 0, -1] }[ev.key];
+  if (m) { ev.preventDefault(); move(...m); }
+});
+
+$("b_start").onclick = () => gcode("VAOC_START" + ($("c_reset").checked ? " RESET=1" : ""), "Start session");
+$("b_end").onclick = () => gcode("VAOC_END", "End session");
+$("b_set").onclick = () => gcode("VAOC_SET_TOOL", "Save");
+$("b_z").onclick = () => gcode("VAOC_CALIBRATE_Z", "Measure Z");
+$("b_zq").onclick = () => gcode("VAOC_Z_QUERY", "Switch state");
+$("b_echo").onclick = () => gcode("VAOC_ECHO_OFFSETS", "Print offsets");
+$("b_apply").onclick = () => gcode("VAOC_APPLY_OFFSETS", "Reload offsets");
+
+for (const id of ["camurl", "ppm"]) { $(id).value = store.get("vaoc_" + id, ""); $(id).addEventListener("change", () => { store.set("vaoc_" + id, $(id).value); setCam(); }); }
+for (const id of ["flipx", "flipy"]) { $(id).checked = store.get("vaoc_" + id, "0") === "1"; $(id).addEventListener("change", () => store.set("vaoc_" + id, $(id).checked ? "1" : "0")); }
+$("step").value = store.get("vaoc_step", "0.05"); $("step").addEventListener("change", () => store.set("vaoc_step", $("step").value));
+
+let autoCam = "";
+function setCam() {
+  const u = $("camurl").value.trim() || autoCam;
+  if (u && $("cam").dataset.src !== u) { $("cam").dataset.src = u; $("cam").src = u; }
+}
+
+async function findCam() {
+  try {
+    const j = await api("/server/webcams/list");
+    const cams = (j.result && j.result.webcams) || [];
+    const c = cams.find(w => /vaoc|nozzle|under/i.test(w.name || "")) || cams[0];
+    if (c) {
+      const base = location.protocol + "//" + location.hostname;
+      autoCam = new URL(c.stream_url, base).toString();
+      setCam();
+    }
+  } catch (e) { /* the camera URL can be typed in */ }
+}
+
+function td(t) { const e = document.createElement("td"); e.textContent = t; return e; }
+
+async function refresh() {
+  try {
+    const q = "toolchanger&save_variables&gcode_macro%20_VAOC_STATE&toolhead";
+    const j = await api("/printer/objects/query?" + q);
+    const o = j.result.status;
+    const tc = o.toolchanger || {};
+    const active = !!(o["gcode_macro _VAOC_STATE"] && o["gcode_macro _VAOC_STATE"].active);
+    const p = $("p_active"); p.textContent = active ? "session active" : "idle"; p.className = "pill" + (active ? " on" : "");
+    ["b_end", "b_set"].forEach(id => $(id).disabled = !active);
+    document.querySelectorAll("#tools button").forEach(b => b.disabled = !active);
+    const nums = tc.tool_numbers || [];
+    const key = nums.join(",") + "|" + tc.tool_number;
+    if (key !== toolsKey) {
+      toolsKey = key; $("tools").textContent = "";
+      nums.forEach(n => {
+        const b = document.createElement("button");
+        b.textContent = "T" + n + (n === tc.tool_number ? " (mounted)" : "");
+        if (n === tc.tool_number) b.className = "primary";
+        b.disabled = !active;
+        b.onclick = () => gcode("VAOC_LOAD_TOOL T=" + n, "Load T" + n);
+        $("tools").appendChild(b);
+      });
+    }
+    const v = (o.save_variables && o.save_variables.variables) || {};
+    const t = $("offsets"); t.textContent = "";
+    const h = document.createElement("tr"); ["Tool", "X", "Y", "Z"].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
+    nums.forEach(n => {
+      const r = document.createElement("tr");
+      r.appendChild(td("T" + n));
+      ["x", "y", "z"].forEach(a => { const val = v["t" + n + "_offset_" + a]; r.appendChild(td(val === undefined ? "-" : Number(val).toFixed(3))); });
+      t.appendChild(r);
+    });
+    if (!busy && $("status").textContent === "Connecting...") say("Ready.", "ok");
+  } catch (e) { if (!busy) say("Cannot reach Klipper: " + e.message, "err"); }
+}
+
+findCam(); refresh(); setInterval(() => { if (!busy) refresh(); }, 3000);
+</script>
+</body>
+</html>
