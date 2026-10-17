@@ -8,6 +8,8 @@ or Kalico. It does not depend on MadMax itself, only on klipper-toolchanger's to
 - **XY:** you centre every nozzle in a crosshair (web page or console). The macros turn that into the
   X and Y offset of each tool.
 - **Z:** each nozzle presses a switch. The macros turn the trigger heights into the Z offset of each tool.
+- **Tools (optional):** RatOS style `T0` ... `T9` commands and a Tools page for changers with several tools,
+  including hotend swappers where every tool has its own heater and fan.
 
 It is based on the VAOC macros of RatOS and the probe code of Klipper. It is **not** automatic nozzle
 detection: like the RatOS VAOC, you do the centring by eye (a few clicks per tool).
@@ -16,10 +18,12 @@ detection: like the RatOS VAOC, you do the centring by eye (a few clicks per too
 
 | File | What it does |
 |---|---|
-| `vaoc.cfg` | All macros. |
+| `vaoc.cfg` | The alignment and calibration macros. |
+| `vaoc_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
+| `vaoc_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `klippy_extras/vaoc_z_probe.py` | Klipper module for the Z switch. Works next to Beacon, Cartographer or any probe. |
-| `ui/` | Optional alignment web page with camera view, crosshair and arrow buttons. |
-| `examples/` | Hardware sections and a `printer.cfg` example. |
+| `ui/` | Optional web page: a Tools tab (heaters, fans, mount, offsets) and an Alignment tab (camera, crosshair, arrows). |
+| `examples/` | Hardware sections, a `printer.cfg` example and the Mainsail menu entry. |
 | `install.sh` | Links the module into Klipper and Kalico. |
 
 ## Requirements
@@ -64,6 +68,91 @@ stops with "Move out of range".
 
 Do the Z measurement once XY is saved, because the switch position is relative to the camera reference.
 
+## Tool commands and multi tool printers
+
+Up to ten tools are supported: `T0` ... `T9`. The VAOC macros loop over whatever klipper-toolchanger
+reports, so the alignment and the Z measurement work with every configured tool; the ten comes from the
+`T0` ... `T9` macros (add more by copying one) and the ten saved-temperature variables of the standby handling.
+
+### A hotend swapper with one extruder
+
+klipper-toolchanger does not need one `[extruder]` per tool. A tool can have its own heater next to a shared
+extruder. Give every tool a `heater:` (a `[heater_generic ...]` or an `[extruder...]` section) and a `fan:`
+(a `[fan_generic ...]`), and leave out `extruder:`:
+
+```
+[heater_generic hotend0]
+heater_pin: ...
+sensor_type: ...
+sensor_pin: ...
+control: pid
+...
+[fan_generic fan0]
+pin: ...
+
+[tool T0]
+tool_number: 0
+heater: heater_generic hotend0
+fan: fan_generic fan0
+```
+
+Things to know for this layout:
+
+- **Cold extrusion check.** Klipper checks `min_extrude_temp` against the heater of the one `[extruder]` section.
+  Klipper cannot take that check from a `heater_generic`, so with the heaters on the tools the `[extruder]`
+  heater has to be something real or `min_extrude_temp` has to be `0`. In the second case Klipper does not
+  stop a cold extrusion any more, so keep the temperature handling in your own macros or the slicer. I have
+  not tried this on your board; decide it with your hardware in mind.
+- **M104 / M109.** Klipper's own `M104` and `M109` only know the `[extruder]` heater, and
+  klipper-toolchanger does not wrap them. Slicer lines like `M104 T1 S220` therefore do nothing for a
+  `heater_generic` tool. Include `vaoc_tool_heaters.cfg` (see below) or let the slicer use
+  `SET_TOOL_TEMPERATURE T=1 TARGET=220` through its custom G-code.
+- **Fans.** `M106 S.. T..` and `M107 T..` are handled by klipper-toolchanger (its fan switcher) and need
+  `fan:` on the tool. Do not define a `[fan]` section next to tool fans; klipper-toolchanger refuses that.
+- **Beacon macros.** The thermal expansion offset of the Beacon macro set follows the `[extruder]` named in
+  `_BEACON_SETTINGS`, not the heater of the mounted tool. It is not correct for a `heater_generic` hotend.
+
+### The T commands
+
+```
+[include vaoc/vaoc.cfg]
+[include vaoc/vaoc_tools.cfg]      # BEFORE the [tool Tn] sections
+```
+
+The include order matters. klipper-toolchanger registers its own `T0` ... `T9` for every tool and does
+not replace a macro that already exists, so the macros must be loaded first. If you put them after the
+tools, Klipper stops with `gcode command T0 already registered`.
+
+| Command | Meaning |
+|---|---|
+| `T0` ... `T9` | Mount the tool (`SELECT_TOOL`), apply its saved offset in `gcode_offset` mode, and run the standby handling. Does nothing when that tool is already mounted. An unconfigured tool prints a warning; it does not raise an error, because any G-code error makes klipper-toolchanger forget the mounted tool. |
+| `VAOC_SET_TEMP [T=] TARGET= [WAIT=1]` | Set the temperature of a tool (default: the mounted one). |
+| `VAOC_TOOL_STANDBY [T=]` | Set the tool to `standby_temp` and remember its temperature. |
+| `VAOC_TOOLS_OFF` | All tool heaters off. |
+| `VAOC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target. |
+
+`_VAOC_TOOLS_SETTINGS` has two settings: `standby_mode` and `standby_temp`. With `standby_mode: 'off'`
+(default) a tool change does not touch any heater, which is right when the slicer sends its own standby
+temperatures. With `'standby'` the tool that is put away goes to `standby_temp` (0 = off), and it returns
+to its earlier temperature when it is mounted again (`wait_on_select` waits for it). Only a tool that is still at
+`standby_temp` is restored, so a heater you switched off yourself stays off. For this to work change
+temperatures with `M104 T..`, `VAOC_SET_TEMP`, or the page; raw `SET_TOOL_TEMPERATURE` bypasses the memory.
+
+Like RatOS, every `T<n>` macro has an `active` variable that is `True` for the mounted tool. The state
+of klipper-toolchanger (`printer.toolchanger.tool_number`) is the real source; `active` is only for
+frontends that read it.
+
+The RatOS `T0`/`T1` macros are written for IDEX (parking positions, the second carriage), so only the
+idea carries over to a tool changer: a `T` command per tool, state variables, standby temperatures.
+
+### M104 and M109 with T
+
+`vaoc_tool_heaters.cfg` wraps `M104` and `M109` so `T` selects the tool and no `T` means the mounted tool. Without
+a mounted tool and without `T` the original command runs. `M109` waits for the tool it names; it does not
+mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define the macros `M104` and `M109`,
+Klipper does not complain but merges them, and the file included last silently wins (I tried it). This file calls the
+Beacon offset update itself when the Beacon macros are loaded, so leave the Beacon hooks file out.
+
 ## Commands
 
 | Command | Meaning |
@@ -75,7 +164,7 @@ Do the Z measurement once XY is saved, because the switch position is relative t
 | `VAOC_END` | Finish, mount the reference tool, LED off. |
 | `VAOC_CALIBRATE_Z [TEMP=]` | Measure the Z offset of all tools on the switch. |
 | `VAOC_AUTO_Z_OFFSET [TEMP=]` | Same, meant for `PRINT_START` after homing. |
-| `VAOC_ECHO_OFFSETS`, `VAOC_RESET_OFFSETS [T=]`, `VAOC_APPLY_OFFSETS`, `VAOC_CHECK` | Utilities. |
+| `VAOC_ECHO_OFFSETS`, `VAOC_RESET_OFFSETS [T=]`, `VAOC_APPLY_OFFSETS`, `VAOC_CHECK` | Utilities. `VAOC_CHECK` also checks the heater of every tool and that `T0` ... `T9` are the VAOC macros. |
 | `VAOC_Z_QUERY`, `VAOC_Z_PROBE`, `VAOC_Z_PROBE_ACCURACY` | The switch module. Use the last one to check its repeatability. |
 
 Wrong input (a move that is too large, no session, a missing tool) only prints a warning and does nothing.
@@ -109,26 +198,58 @@ samples spread more than `z_range_warning` (0.02 mm by default); clean the nozzl
 included, and restores the earlier heater targets afterwards. If a measurement fails in between,
 the heaters stay where they are: check them.
 
-## The alignment page
+## The web page
 
 The page works on a phone or a computer, and needs only the Python that is already on the printer.
 
 1. Copy `ui/vaoc-ui.service` to `/etc/systemd/system/`, fix the user and the path inside, then
    `sudo systemctl enable --now vaoc-ui`.
 2. Open `http://<printer-address>:8099`.
-3. Choose your camera in Moonraker's webcam settings (a webcam named with "vaoc", "nozzle" or "under" is
-   preferred), or type the stream URL into the page.
-4. Arrow keys and Page Up / Page Down also move. Enter pixels per mm to click on the picture to centre.
 
-The page can move the printer, and the server has no login. Use it only on a trusted network.
+**Tools tab.** One card per tool, up to ten: mounted or docked, current and target temperature with a
+state (off, heating, ready, cooling), a field and buttons to set the temperature, put the tool on standby or
+switch it off, a fan slider, the saved offsets, and Mount, Dock and Align. The bar on top has All heaters off,
+the tool list, and Measure Z of all tools with an optional temperature. Without `vaoc_tools.cfg` the buttons
+fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`. Align starts a session if none is running, mounts that tool over
+the camera and opens the Alignment tab.
+
+**Alignment tab.**
+
+1. Choose your camera in Moonraker's webcam settings (a webcam named with "vaoc", "nozzle" or "under" is
+   preferred), or type the stream URL into the page.
+2. Arrow keys and Page Up / Page Down also move. Enter pixels per mm to click on the picture to centre.
+
+The page can move the printer and heat tools, and the server has no login. Use it only on a trusted network.
+
+### A link in Mainsail
+
+Mainsail can show a menu entry that opens the page, but it cannot embed it: the entry is a link. Copy
+`examples/mainsail/navi.json` to the `.theme` folder in your config folder (`~/printer_data/config/.theme/navi.json`,
+create the folder if it does not exist), replace `YOUR-PRINTER-ADDRESS` with the address of the printer, and reload Mainsail.
+If you already have a `navi.json`, add the entry to its list. Mainsail's documentation describes the
+fields (`title`, `href`, `target`, `position`, `icon`); I could not check the exact folder on a running
+Mainsail, so if the entry does not appear, look up "custom navigation" in the Mainsail docs for your version.
+`target` `_self` opens the page in the same tab, `_blank` in a new one.
 
 ## What was tested, and what was not
 
 Tested, on Klipper and on Kalico, in batch mode with the real klipper-toolchanger and a three tool test
-config: the whole XY session, the offset maths in both methods, the Z calibration (with a stand-in for
+config (the alignment and Z parts): the whole XY session, the offset maths in both methods, the Z calibration (with a stand-in for
 the switch that returns known heights), heater restore, loading the saved offsets, error handling,
 `vaoc_z_probe` loading and issuing its probing moves, and the page's server and buttons against a fake
 Moonraker.
+
+Tested for the multi tool part, on Klipper and on Kalico, in batch mode with the real klipper-toolchanger and a
+ten tool config (`heater_generic` hotend and `fan_generic` fan per tool, one extruder): `T0` ... `T9`, the
+warning for an unconfigured tool, a repeated `T` command, `VAOC_SET_TEMP`, standby and restore, `VAOC_TOOLS_OFF`,
+`M104` / `M109` with `T`, `M106 T`, the `active` variable, `VAOC_CHECK`, and the refusal of the wrong include order.
+The page was tested in a headless browser against a fake Moonraker with ten tools: every button sends the expected
+command, phone width, and the fallback without `vaoc_tools.cfg`.
+
+**Not tested:** waiting for a temperature (`WAIT=1`, `wait_on_select`) cannot be checked in batch mode, fan speeds
+could not be read back in the test rig, and the Mainsail menu entry was not tried in a real Mainsail.
+Nothing was tried on a real tool changer, and the page was never used with a real camera.
+Ten tools are tested only as a config that loads and answers commands, no tool was physically swapped.
 
 **Not tested: real hardware.** Batch mode has no camera, no switch that triggers and no moving printer.
 The first run needs care: keep a hand near the emergency stop, start with `safe_z` generously high, check

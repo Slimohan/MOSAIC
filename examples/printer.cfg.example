@@ -4,6 +4,14 @@
 [include vaoc/vaoc.cfg]
 [include vaoc/examples/vaoc_hardware.cfg]
 
+# Optional: T0 ... T9 commands, per tool heater handling and the tools page.
+# It must come BEFORE the [tool Tn] sections, or Klipper stops with
+# "gcode command T0 already registered".
+[include vaoc/vaoc_tools.cfg]
+# Optional: M104 / M109 with a T parameter (slicer lines such as "M104 T1 S220").
+# Not together with beacon_heater_hooks.cfg, both define M104 and M109 and the one included last wins.
+#[include vaoc/vaoc_tool_heaters.cfg]
+
 # Only the settings that differ from the defaults. This section must come AFTER the include.
 [gcode_macro _VAOC_SETTINGS]
 variable_reference_tool: 0
@@ -15,6 +23,32 @@ variable_camera_y: 30.0
 variable_focus_z: 8.0
 variable_safe_z: 30.0
 variable_z_cal_temp: 0
+
+# Optional, only with vaoc_tools.cfg:
+# [gcode_macro _VAOC_TOOLS_SETTINGS]
+# variable_standby_mode: 'standby'   # a tool that is put away goes to standby_temp
+# variable_standby_temp: 150.0
+# variable_wait_on_select: True
+
+# Hotend swapper with one shared extruder: every tool has its own heater and fan.
+# The tool sections come AFTER the includes above.
+#[extruder]
+#...the one extruder with the stepper, see the note about min_extrude_temp in README.md
+#
+#[heater_generic hotend0]
+#...heater_pin, sensor_type, sensor_pin, control, min_temp, max_temp
+#[fan_generic fan0]
+#pin: ...
+#
+#[toolchanger]
+#...
+#[tool T0]
+#tool_number: 0
+#heater: heater_generic hotend0
+#fan: fan_generic fan0
+#...pickup_gcode, dropoff_gcode as for your changer
+#
+# (repeat for T1 ... T9)
 
 # Optional: measure Z at every print start. Call this after G28 in PRINT_START.
 #   VAOC_AUTO_Z_OFFSET

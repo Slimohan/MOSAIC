@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VAOC alignment</title>
+<title>VAOC tools</title>
 <style>
   :root { --bg:#14171a; --fg:#e8eaed; --mute:#9aa0a6; --card:#1f2428; --line:#3a4046; --acc:#4da3ff; --ok:#3ecf6e; --bad:#ff5d5d; }
   @media (prefers-color-scheme: light) { :root { --bg:#f4f5f7; --fg:#1b1f23; --mute:#5b636b; --card:#fff; --line:#d0d5da; } }
@@ -35,14 +35,60 @@
   table { border-collapse:collapse; width:100%; font-size:13px; } td, th { text-align:left; padding:3px 6px; border-bottom:1px solid var(--line); }
   .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; border:1px solid var(--line); }
   .pill.on { border-color:var(--ok); color:var(--ok); }
+  nav.tabs { max-width:960px; margin:0 auto; padding:16px 16px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  nav.tabs h1 { margin:0 12px 0 0; }
+  nav.tabs button.tab { border-radius:20px; }
+  nav.tabs button.tab.sel { background:var(--acc); border-color:var(--acc); color:#04121f; font-weight:600; }
+  .hidden { display:none !important; }
+  #tab_tools { max-width:960px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+  .cards { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; display:grid; gap:8px; align-content:start; }
+  .card.mounted { border-color:var(--ok); }
+  .card h3 { margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; }
+  .card .temp { font-size:20px; font-variant-numeric:tabular-nums; }
+  .card .temp small { color:var(--mute); font-size:13px; }
+  .card .mini { font-size:12px; color:var(--mute); font-variant-numeric:tabular-nums; }
+  .card .row { margin:0; gap:6px; }
+  .card button { padding:5px 9px; font-size:13px; }
+  .card input[type=number] { width:56px; padding:4px 5px; }
+  .card .row button { padding:5px 7px; }
+  .card input[type=range] { width:100%; }
+  .pill.hot { border-color:#ff9f43; color:#ff9f43; }
+  .pill.dock { color:var(--mute); }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .note { color:var(--mute); font-size:13px; }
   ol { margin:0; padding-left:20px; color:var(--mute); font-size:13px; }
 </style>
 </head>
 <body>
-<main>
+<nav class="tabs">
+  <h1>VAOC</h1>
+  <button class="tab" id="tab_b_tools">Tools</button>
+  <button class="tab" id="tab_b_align">Alignment</button>
+  <span id="status" style="margin-left:auto">Connecting...</span>
+</nav>
+
+<div id="tab_tools">
   <section>
-    <h1>VAOC alignment</h1>
-    <div id="status">Connecting...</div>
+    <div class="bar">
+      <button id="g_off" class="warn">All heaters off</button>
+      <button id="g_status">Print tool list to console</button>
+      <button id="g_z">Measure Z of all tools</button>
+      <label>at <input type="number" id="g_ztemp" min="0" max="350" step="5" value="0" style="width:70px"> &deg;C (0 = cold)</label>
+      <span class="pill" id="g_bed">bed -</span>
+    </div>
+    <div class="note" id="g_note"></div>
+  </section>
+  <div class="cards" id="cards"></div>
+  <section>
+    <h2>Calibration</h2>
+    <div class="note">Align sets the X and Y offset of a tool with the camera, Measure Z sets the Z offsets with the switch. <b>Align</b> on a card starts a session if none runs, mounts that tool over the camera and opens the Alignment tab. The offsets are saved for every tool and survive a restart.</div>
+  </section>
+</div>
+
+<main id="tab_align">
+  <section>
+    <h1 style="display:none">VAOC alignment</h1>
     <div class="view" id="view" title="Click to centre the nozzle on that spot (needs pixels per mm)">
       <img id="cam" alt="camera">
       <div class="cross"></div><div class="ring"></div>
@@ -180,17 +226,141 @@ async function findCam() {
 
 function td(t) { const e = document.createElement("td"); e.textContent = t; return e; }
 
+// ---------------------------------------------------------------- tabs
+function showTab(name) {
+  $("tab_tools").classList.toggle("hidden", name !== "tools");
+  $("tab_align").classList.toggle("hidden", name !== "align");
+  $("tab_b_tools").classList.toggle("sel", name === "tools");
+  $("tab_b_align").classList.toggle("sel", name === "align");
+  store.set("vaoc_tab", name);
+}
+$("tab_b_tools").onclick = () => showTab("tools");
+$("tab_b_align").onclick = () => showTab("align");
+showTab(store.get("vaoc_tab", "tools") === "align" ? "align" : "tools");
+
+// ---------------------------------------------------------------- state
+let toolNames = [];        // e.g. ["tool T0", ...], learned from the toolchanger
+let hasVaocTools = false;  // vaoc_tools.cfg is loaded
+let sessionActive = false, refTool = 0;
+let cardKey = "";
+const cards = {};          // tool number -> element references
+
+const q = objs => "/printer/objects/query?" + objs.map(encodeURIComponent).join("&");
+const fmt = v => (v === undefined || v === null || isNaN(v)) ? "-" : Number(v).toFixed(1);
+
+function cmdMount(n) { return hasVaocTools ? "T" + n : "SELECT_TOOL T=" + n; }
+function cmdTemp(n, t) { return (hasVaocTools ? "VAOC_SET_TEMP T=" + n + " TARGET=" : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=") + t; }
+function cmdStandby(n) { return hasVaocTools ? "VAOC_TOOL_STANDBY T=" + n : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0"; }
+
+function alignTool(n) {
+  let script = sessionActive ? "" : "VAOC_START\n";
+  if (n !== refTool) script += "VAOC_LOAD_TOOL T=" + n;
+  showTab("align");
+  if (script) gcode(script.trim(), "Align T" + n); else say("T" + n + " is the reference tool and already over the camera.", "ok");
+}
+
+function btn(text, fn, cls) { const b = document.createElement("button"); b.textContent = text; if (cls) b.className = cls; b.onclick = fn; return b; }
+
+function buildCards(nums) {
+  const box = $("cards"); box.textContent = ""; for (const k in cards) delete cards[k];
+  nums.forEach(n => {
+    const el = document.createElement("div"); el.className = "card";
+    const h = document.createElement("h3");
+    const title = document.createElement("span"); title.textContent = "T" + n;
+    const where = document.createElement("span"); where.className = "pill dock"; where.textContent = "docked";
+    h.append(title, where);
+    const temp = document.createElement("div"); temp.className = "temp";
+    const cur = document.createElement("span"); const tgt = document.createElement("small");
+    const state = document.createElement("span"); state.className = "pill"; state.style.marginLeft = "8px";
+    temp.append(cur, tgt, state);
+    const row1 = document.createElement("div"); row1.className = "row";
+    const inp = document.createElement("input"); inp.type = "number"; inp.min = 0; inp.max = 350; inp.step = 5; inp.placeholder = "°C";
+    const setTemp = () => {
+      const v = parseFloat(inp.value);
+      if (!(v >= 0)) { say("Enter a temperature for T" + n + ".", "err"); return; }
+      gcode(cmdTemp(n, v), "T" + n + " to " + v + " °C");
+    };
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") setTemp(); });
+    row1.append(inp, btn("Set", setTemp, "primary"), btn("Standby", () => gcode(cmdStandby(n), "T" + n + " standby")),
+                btn("Off", () => gcode(cmdTemp(n, 0), "T" + n + " off")));
+    const fanRow = document.createElement("div");
+    const fanLabel = document.createElement("div"); fanLabel.className = "mini";
+    const fan = document.createElement("input"); fan.type = "range"; fan.min = 0; fan.max = 100; fan.step = 5; fan.value = 0;
+    fan.addEventListener("input", () => { fanLabel.textContent = "Fan " + fan.value + " %"; });
+    fan.addEventListener("change", () => gcode("M106 S" + Math.round(fan.value * 2.55) + " T" + n, "T" + n + " fan " + fan.value + " %"));
+    fanRow.append(fanLabel, fan);
+    const off = document.createElement("div"); off.className = "mini";
+    const row2 = document.createElement("div"); row2.className = "row";
+    const mount = btn("Mount", () => gcode(cmdMount(n), "Mount T" + n), "primary");
+    const dock = btn("Dock", () => gcode("UNSELECT_TOOL", "Dock T" + n));
+    const align = btn("Align", () => alignTool(n));
+    row2.append(mount, dock, align);
+    el.append(h, temp, row1, fanRow, off, row2);
+    box.appendChild(el);
+    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock };
+  });
+}
+
+function stateOf(t, g) {
+  if (g > 0) return Math.abs(t - g) <= 3 ? ["ready", "on"] : (t < g ? ["heating", "hot"] : ["cooling", "hot"]);
+  return t > 50 ? ["cooling", "hot"] : ["off", ""];
+}
+
+function updateCards(o, nums, v) {
+  const tc = o.toolchanger || {};
+  nums.forEach((n, idx) => {
+    const c = cards[n]; if (!c) return;
+    const ts = o[toolNames[idx]] || {};
+    const mounted = n === tc.tool_number;
+    c.el.classList.toggle("mounted", mounted);
+    c.where.textContent = mounted ? "mounted" : "docked";
+    c.where.className = "pill " + (mounted ? "on" : "dock");
+    c.mount.disabled = mounted; c.dock.disabled = !mounted;
+    const h = ts.heater && o[ts.heater];
+    if (h) {
+      c.cur.textContent = fmt(h.temperature);
+      c.tgt.textContent = " / " + fmt(h.target) + " °C";
+      const [txt, cls] = stateOf(Number(h.temperature), Number(h.target));
+      c.state.textContent = txt; c.state.className = "pill " + cls;
+      c.inp.placeholder = Number(h.target) > 0 ? String(Math.round(h.target)) : "\u00b0C";
+    } else {
+      c.cur.textContent = "no heater"; c.tgt.textContent = ""; c.state.textContent = ""; c.state.className = "pill";
+    }
+    const f = ts.fan && (o[ts.fan] || o["fan_generic " + ts.fan]);
+    c.fanRow.classList.toggle("hidden", !ts.fan);
+    if (f && document.activeElement !== c.fan) {
+      c.fan.value = Math.round((f.speed || 0) * 100); c.fanLabel.textContent = "Fan " + c.fan.value + " %";
+    } else if (!f && ts.fan) { c.fanLabel.textContent = "Fan"; }
+    const xyz = ["x", "y", "z"].map(a => { const val = v["t" + n + "_offset_" + a]; return a.toUpperCase() + " " + (val === undefined ? "-" : Number(val).toFixed(3)); });
+    c.off.textContent = "Offset " + xyz.join("  ");
+  });
+}
+
 async function refresh() {
   try {
-    const q = "toolchanger&save_variables&gcode_macro%20_VAOC_STATE&toolhead";
-    const j = await api("/printer/objects/query?" + q);
+    const base = ["toolchanger", "save_variables", "gcode_macro _VAOC_STATE", "gcode_macro _VAOC_SETTINGS",
+                  "gcode_macro _VAOC_TOOLS_SETTINGS", "heater_bed", "toolhead"].concat(toolNames);
+    const j = await api(q(base));
     const o = j.result.status;
     const tc = o.toolchanger || {};
-    const active = !!(o["gcode_macro _VAOC_STATE"] && o["gcode_macro _VAOC_STATE"].active);
-    const p = $("p_active"); p.textContent = active ? "session active" : "idle"; p.className = "pill" + (active ? " on" : "");
-    ["b_end", "b_set"].forEach(id => $(id).disabled = !active);
-    document.querySelectorAll("#tools button").forEach(b => b.disabled = !active);
     const nums = tc.tool_numbers || [];
+    const names = tc.tool_names || [];
+    // objects of the tools: heater and fan names are in their status
+    if (names.join("|") !== toolNames.join("|")) { toolNames = names.slice(); return refresh(); }
+    const extra = [];
+    toolNames.forEach(nm => { const t = o[nm]; if (t) { if (t.heater) extra.push(t.heater); if (t.fan) { extra.push(t.fan); extra.push("fan_generic " + t.fan); } } });
+    if (extra.length) { const j2 = await api(q(Array.from(new Set(extra)))); Object.assign(o, j2.result.status); }
+
+    sessionActive = !!(o["gcode_macro _VAOC_STATE"] && o["gcode_macro _VAOC_STATE"].active);
+    const st = o["gcode_macro _VAOC_SETTINGS"];
+    refTool = st && st.reference_tool !== undefined ? Number(st.reference_tool) : 0;
+    hasVaocTools = !!o["gcode_macro _VAOC_TOOLS_SETTINGS"];
+    $("g_note").textContent = hasVaocTools ? "" :
+      "vaoc_tools.cfg is not loaded: the buttons use SELECT_TOOL and SET_TOOL_TEMPERATURE, there are no T0 ... T9 macros and no standby handling.";
+
+    const p = $("p_active"); p.textContent = sessionActive ? "session active" : "idle"; p.className = "pill" + (sessionActive ? " on" : "");
+    ["b_end", "b_set"].forEach(id => $(id).disabled = !sessionActive);
+    document.querySelectorAll("#tools button").forEach(b => b.disabled = !sessionActive);
     const key = nums.join(",") + "|" + tc.tool_number;
     if (key !== toolsKey) {
       toolsKey = key; $("tools").textContent = "";
@@ -198,12 +368,18 @@ async function refresh() {
         const b = document.createElement("button");
         b.textContent = "T" + n + (n === tc.tool_number ? " (mounted)" : "");
         if (n === tc.tool_number) b.className = "primary";
-        b.disabled = !active;
+        b.disabled = !sessionActive;
         b.onclick = () => gcode("VAOC_LOAD_TOOL T=" + n, "Load T" + n);
         $("tools").appendChild(b);
       });
     }
     const v = (o.save_variables && o.save_variables.variables) || {};
+    const ck = nums.join(",");
+    if (ck !== cardKey) { cardKey = ck; buildCards(nums); }
+    updateCards(o, nums, v);
+    const bed = o.heater_bed;
+    $("g_bed").textContent = bed ? "bed " + fmt(bed.temperature) + " / " + fmt(bed.target) + " °C" : "no bed";
+
     const t = $("offsets"); t.textContent = "";
     const h = document.createElement("tr"); ["Tool", "X", "Y", "Z"].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
     nums.forEach(n => {
@@ -215,6 +391,13 @@ async function refresh() {
     if (!busy && $("status").textContent === "Connecting...") say("Ready.", "ok");
   } catch (e) { if (!busy) say("Cannot reach Klipper: " + e.message, "err"); }
 }
+
+$("g_off").onclick = () => {
+  const nums = Object.keys(cards).map(Number);
+  gcode(hasVaocTools ? "VAOC_TOOLS_OFF" : nums.map(n => "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0").join("\n"), "All tool heaters off");
+};
+$("g_status").onclick = () => gcode(hasVaocTools ? "VAOC_TOOLS_STATUS" : "VAOC_ECHO_OFFSETS", "Tool list");
+$("g_z").onclick = () => { const t = parseFloat($("g_ztemp").value) || 0; gcode("VAOC_CALIBRATE_Z" + (t > 0 ? " TEMP=" + t : ""), "Measure Z"); };
 
 findCam(); refresh(); setInterval(() => { if (!busy) refresh(); }, 3000);
 </script>
