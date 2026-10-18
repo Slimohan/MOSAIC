@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VAOC tools</title>
+<title>MOSAIC</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cg%20transform%3D%22translate%280%200%29%20scale%281%29%22%3E%3Crect%20x%3D%224%22%20y%3D%224%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%23f59e0b%22/%3E%3Crect%20x%3D%2246%22%20y%3D%224%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%233b82f6%22/%3E%3Crect%20x%3D%2288%22%20y%3D%224%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%232f6fe0%22/%3E%3Crect%20x%3D%2288%22%20y%3D%2246%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%231d8fc9%22/%3E%3Crect%20x%3D%2288%22%20y%3D%2288%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%230ea5a4%22/%3E%3Crect%20x%3D%2246%22%20y%3D%2288%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%2314b8a6%22/%3E%3Crect%20x%3D%224%22%20y%3D%2288%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%232bc291%22/%3E%3Crect%20x%3D%224%22%20y%3D%2246%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%235b8def%22/%3E%3Crect%20x%3D%2246%22%20y%3D%2246%22%20width%3D%2236%22%20height%3D%2236%22%20rx%3D%227%22%20fill%3D%22%23111c33%22%20stroke%3D%22%234b5b78%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M64%2050V78M50%2064H78%22%20stroke%3D%22%23e2e8f0%22%20stroke-opacity%3D%22.75%22%20stroke-width%3D%221.6%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2210.5%22%20fill%3D%22none%22%20stroke%3D%22%23f59e0b%22%20stroke-width%3D%223%22/%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%222.4%22%20fill%3D%22%23f59e0b%22/%3E%3C/g%3E%3C/svg%3E">
 <style>
   :root { --bg:#14171a; --fg:#e8eaed; --mute:#9aa0a6; --card:#1f2428; --line:#3a4046; --acc:#4da3ff; --ok:#3ecf6e; --bad:#ff5d5d; }
   @media (prefers-color-scheme: light) { :root { --bg:#f4f5f7; --fg:#1b1f23; --mute:#5b636b; --card:#fff; --line:#d0d5da; } }
@@ -62,7 +63,7 @@
 </head>
 <body>
 <nav class="tabs">
-  <h1>VAOC</h1>
+  <h1><svg viewBox="0 0 128 128" width="26" height="26" aria-hidden="true" style="vertical-align:-5px;margin-right:6px"><g transform="translate(0 0) scale(1)"><rect x="4" y="4" width="36" height="36" rx="7" fill="#f59e0b"/><rect x="46" y="4" width="36" height="36" rx="7" fill="#3b82f6"/><rect x="88" y="4" width="36" height="36" rx="7" fill="#2f6fe0"/><rect x="88" y="46" width="36" height="36" rx="7" fill="#1d8fc9"/><rect x="88" y="88" width="36" height="36" rx="7" fill="#0ea5a4"/><rect x="46" y="88" width="36" height="36" rx="7" fill="#14b8a6"/><rect x="4" y="88" width="36" height="36" rx="7" fill="#2bc291"/><rect x="4" y="46" width="36" height="36" rx="7" fill="#5b8def"/><rect x="46" y="46" width="36" height="36" rx="7" fill="#111c33" stroke="#4b5b78" stroke-width="1.5"/><path d="M64 50V78M50 64H78" stroke="#e2e8f0" stroke-opacity=".75" stroke-width="1.6" fill="none"/><circle cx="64" cy="64" r="10.5" fill="none" stroke="#f59e0b" stroke-width="3"/><circle cx="64" cy="64" r="2.4" fill="#f59e0b"/></g></svg>MOSAIC</h1>
   <button class="tab" id="tab_b_tools">Tools</button>
   <button class="tab" id="tab_b_align">Alignment</button>
   <span id="status" style="margin-left:auto">Connecting...</span>
@@ -88,7 +89,7 @@
 
 <main id="tab_align">
   <section>
-    <h1 style="display:none">VAOC alignment</h1>
+    <h1 style="display:none">MOSAIC alignment</h1>
     <div class="view" id="view" title="Click to centre the nozzle on that spot (needs pixels per mm)">
       <img id="cam" alt="camera">
       <div class="cross"></div><div class="ring"></div>
@@ -165,7 +166,7 @@ function move(dx, dy, dz) {
   const k = parseFloat($("step").value);
   const fx = $("flipx").checked ? -1 : 1, fy = $("flipy").checked ? -1 : 1;
   const f = v => (v * k).toFixed(3);
-  gcode("VAOC_MOVE X=" + f(dx * fx) + " Y=" + f(dy * fy) + " Z=" + f(dz), "Move");
+  gcode("MOSAIC_MOVE X=" + f(dx * fx) + " Y=" + f(dy * fy) + " Z=" + f(dz), "Move");
 }
 
 document.querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => {
@@ -184,7 +185,7 @@ $("view").addEventListener("click", ev => {
   const lim = 2;
   const c = v => Math.max(-lim, Math.min(lim, v));
   const fx = $("flipx").checked ? -1 : 1, fy = $("flipy").checked ? -1 : 1;
-  gcode("VAOC_MOVE X=" + c(dx * fx).toFixed(3) + " Y=" + c(dy * fy).toFixed(3), "Centre on click");
+  gcode("MOSAIC_MOVE X=" + c(dx * fx).toFixed(3) + " Y=" + c(dy * fy).toFixed(3), "Centre on click");
 });
 
 window.addEventListener("keydown", ev => {
@@ -193,17 +194,17 @@ window.addEventListener("keydown", ev => {
   if (m) { ev.preventDefault(); move(...m); }
 });
 
-$("b_start").onclick = () => gcode("VAOC_START" + ($("c_reset").checked ? " RESET=1" : ""), "Start session");
-$("b_end").onclick = () => gcode("VAOC_END", "End session");
-$("b_set").onclick = () => gcode("VAOC_SET_TOOL", "Save");
-$("b_z").onclick = () => gcode("VAOC_CALIBRATE_Z", "Measure Z");
-$("b_zq").onclick = () => gcode("VAOC_Z_QUERY", "Switch state");
-$("b_echo").onclick = () => gcode("VAOC_ECHO_OFFSETS", "Print offsets");
-$("b_apply").onclick = () => gcode("VAOC_APPLY_OFFSETS", "Reload offsets");
+$("b_start").onclick = () => gcode("MOSAIC_START" + ($("c_reset").checked ? " RESET=1" : ""), "Start session");
+$("b_end").onclick = () => gcode("MOSAIC_END", "End session");
+$("b_set").onclick = () => gcode("MOSAIC_SET_TOOL", "Save");
+$("b_z").onclick = () => gcode("MOSAIC_CALIBRATE_Z", "Measure Z");
+$("b_zq").onclick = () => gcode("MOSAIC_Z_QUERY", "Switch state");
+$("b_echo").onclick = () => gcode("MOSAIC_ECHO_OFFSETS", "Print offsets");
+$("b_apply").onclick = () => gcode("MOSAIC_APPLY_OFFSETS", "Reload offsets");
 
-for (const id of ["camurl", "ppm"]) { $(id).value = store.get("vaoc_" + id, ""); $(id).addEventListener("change", () => { store.set("vaoc_" + id, $(id).value); setCam(); }); }
-for (const id of ["flipx", "flipy"]) { $(id).checked = store.get("vaoc_" + id, "0") === "1"; $(id).addEventListener("change", () => store.set("vaoc_" + id, $(id).checked ? "1" : "0")); }
-$("step").value = store.get("vaoc_step", "0.05"); $("step").addEventListener("change", () => store.set("vaoc_step", $("step").value));
+for (const id of ["camurl", "ppm"]) { $(id).value = store.get("mosaic_" + id, ""); $(id).addEventListener("change", () => { store.set("mosaic_" + id, $(id).value); setCam(); }); }
+for (const id of ["flipx", "flipy"]) { $(id).checked = store.get("mosaic_" + id, "0") === "1"; $(id).addEventListener("change", () => store.set("mosaic_" + id, $(id).checked ? "1" : "0")); }
+$("step").value = store.get("mosaic_step", "0.05"); $("step").addEventListener("change", () => store.set("mosaic_step", $("step").value));
 
 let autoCam = "";
 function setCam() {
@@ -215,7 +216,7 @@ async function findCam() {
   try {
     const j = await api("/server/webcams/list");
     const cams = (j.result && j.result.webcams) || [];
-    const c = cams.find(w => /vaoc|nozzle|under/i.test(w.name || "")) || cams[0];
+    const c = cams.find(w => /mosaic|vaoc|nozzle|under/i.test(w.name || "")) || cams[0];
     if (c) {
       const base = location.protocol + "//" + location.hostname;
       autoCam = new URL(c.stream_url, base).toString();
@@ -232,15 +233,15 @@ function showTab(name) {
   $("tab_align").classList.toggle("hidden", name !== "align");
   $("tab_b_tools").classList.toggle("sel", name === "tools");
   $("tab_b_align").classList.toggle("sel", name === "align");
-  store.set("vaoc_tab", name);
+  store.set("mosaic_tab", name);
 }
 $("tab_b_tools").onclick = () => showTab("tools");
 $("tab_b_align").onclick = () => showTab("align");
-showTab(store.get("vaoc_tab", "tools") === "align" ? "align" : "tools");
+showTab(store.get("mosaic_tab", "tools") === "align" ? "align" : "tools");
 
 // ---------------------------------------------------------------- state
 let toolNames = [];        // e.g. ["tool T0", ...], learned from the toolchanger
-let hasVaocTools = false;  // vaoc_tools.cfg is loaded
+let hasMosaicTools = false;  // mosaic_tools.cfg is loaded
 let sessionActive = false, refTool = 0;
 let cardKey = "";
 const cards = {};          // tool number -> element references
@@ -248,13 +249,13 @@ const cards = {};          // tool number -> element references
 const q = objs => "/printer/objects/query?" + objs.map(encodeURIComponent).join("&");
 const fmt = v => (v === undefined || v === null || isNaN(v)) ? "-" : Number(v).toFixed(1);
 
-function cmdMount(n) { return hasVaocTools ? "T" + n : "SELECT_TOOL T=" + n; }
-function cmdTemp(n, t) { return (hasVaocTools ? "VAOC_SET_TEMP T=" + n + " TARGET=" : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=") + t; }
-function cmdStandby(n) { return hasVaocTools ? "VAOC_TOOL_STANDBY T=" + n : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0"; }
+function cmdMount(n) { return hasMosaicTools ? "T" + n : "SELECT_TOOL T=" + n; }
+function cmdTemp(n, t) { return (hasMosaicTools ? "MOSAIC_SET_TEMP T=" + n + " TARGET=" : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=") + t; }
+function cmdStandby(n) { return hasMosaicTools ? "MOSAIC_TOOL_STANDBY T=" + n : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0"; }
 
 function alignTool(n) {
-  let script = sessionActive ? "" : "VAOC_START\n";
-  if (n !== refTool) script += "VAOC_LOAD_TOOL T=" + n;
+  let script = sessionActive ? "" : "MOSAIC_START\n";
+  if (n !== refTool) script += "MOSAIC_LOAD_TOOL T=" + n;
   showTab("align");
   if (script) gcode(script.trim(), "Align T" + n); else say("T" + n + " is the reference tool and already over the camera.", "ok");
 }
@@ -338,8 +339,8 @@ function updateCards(o, nums, v) {
 
 async function refresh() {
   try {
-    const base = ["toolchanger", "save_variables", "gcode_macro _VAOC_STATE", "gcode_macro _VAOC_SETTINGS",
-                  "gcode_macro _VAOC_TOOLS_SETTINGS", "heater_bed", "toolhead"].concat(toolNames);
+    const base = ["toolchanger", "save_variables", "gcode_macro _MOSAIC_STATE", "gcode_macro _MOSAIC_SETTINGS",
+                  "gcode_macro _MOSAIC_TOOLS_SETTINGS", "heater_bed", "toolhead"].concat(toolNames);
     const j = await api(q(base));
     const o = j.result.status;
     const tc = o.toolchanger || {};
@@ -351,12 +352,12 @@ async function refresh() {
     toolNames.forEach(nm => { const t = o[nm]; if (t) { if (t.heater) extra.push(t.heater); if (t.fan) { extra.push(t.fan); extra.push("fan_generic " + t.fan); } } });
     if (extra.length) { const j2 = await api(q(Array.from(new Set(extra)))); Object.assign(o, j2.result.status); }
 
-    sessionActive = !!(o["gcode_macro _VAOC_STATE"] && o["gcode_macro _VAOC_STATE"].active);
-    const st = o["gcode_macro _VAOC_SETTINGS"];
+    sessionActive = !!(o["gcode_macro _MOSAIC_STATE"] && o["gcode_macro _MOSAIC_STATE"].active);
+    const st = o["gcode_macro _MOSAIC_SETTINGS"];
     refTool = st && st.reference_tool !== undefined ? Number(st.reference_tool) : 0;
-    hasVaocTools = !!o["gcode_macro _VAOC_TOOLS_SETTINGS"];
-    $("g_note").textContent = hasVaocTools ? "" :
-      "vaoc_tools.cfg is not loaded: the buttons use SELECT_TOOL and SET_TOOL_TEMPERATURE, there are no T0 ... T9 macros and no standby handling.";
+    hasMosaicTools = !!o["gcode_macro _MOSAIC_TOOLS_SETTINGS"];
+    $("g_note").textContent = hasMosaicTools ? "" :
+      "mosaic_tools.cfg is not loaded: the buttons use SELECT_TOOL and SET_TOOL_TEMPERATURE, there are no T0 ... T9 macros and no standby handling.";
 
     const p = $("p_active"); p.textContent = sessionActive ? "session active" : "idle"; p.className = "pill" + (sessionActive ? " on" : "");
     ["b_end", "b_set"].forEach(id => $(id).disabled = !sessionActive);
@@ -369,7 +370,7 @@ async function refresh() {
         b.textContent = "T" + n + (n === tc.tool_number ? " (mounted)" : "");
         if (n === tc.tool_number) b.className = "primary";
         b.disabled = !sessionActive;
-        b.onclick = () => gcode("VAOC_LOAD_TOOL T=" + n, "Load T" + n);
+        b.onclick = () => gcode("MOSAIC_LOAD_TOOL T=" + n, "Load T" + n);
         $("tools").appendChild(b);
       });
     }
@@ -394,10 +395,10 @@ async function refresh() {
 
 $("g_off").onclick = () => {
   const nums = Object.keys(cards).map(Number);
-  gcode(hasVaocTools ? "VAOC_TOOLS_OFF" : nums.map(n => "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0").join("\n"), "All tool heaters off");
+  gcode(hasMosaicTools ? "MOSAIC_TOOLS_OFF" : nums.map(n => "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0").join("\n"), "All tool heaters off");
 };
-$("g_status").onclick = () => gcode(hasVaocTools ? "VAOC_TOOLS_STATUS" : "VAOC_ECHO_OFFSETS", "Tool list");
-$("g_z").onclick = () => { const t = parseFloat($("g_ztemp").value) || 0; gcode("VAOC_CALIBRATE_Z" + (t > 0 ? " TEMP=" + t : ""), "Measure Z"); };
+$("g_status").onclick = () => gcode(hasMosaicTools ? "MOSAIC_TOOLS_STATUS" : "MOSAIC_ECHO_OFFSETS", "Tool list");
+$("g_z").onclick = () => { const t = parseFloat($("g_ztemp").value) || 0; gcode("MOSAIC_CALIBRATE_Z" + (t > 0 ? " TEMP=" + t : ""), "Measure Z"); };
 
 findCam(); refresh(); setInterval(() => { if (!busy) refresh(); }, 3000);
 </script>

@@ -1,16 +1,16 @@
-# Z offset switch of the VAOC camera module
+# Z offset switch of the MOSAIC camera module
 #
 # Adapted from RatOS z_offset_probe.py, Copyright (C) 2017-2021 Kevin O'Connor
 # <kevin@koconnor.net> and Helge Keck <HelgeKeck@hotmail.com>. This standalone
 # version for Klipper and Kalico does not depend on Klipper's probe module, so
 # it can live next to a Beacon, Cartographer or any other [probe]. It drives a
-# plain switch (the VAOC Z switch) that the nozzle presses from above and
+# plain switch (the MOSAIC Z switch) that the nozzle presses from above and
 # reports the toolhead Z at which it triggers.
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 #
 # Config:
-#   [vaoc_z_probe]
+#   [mosaic_z_probe]
 #   pin: ^PA3                  # switch pin
 #   x_offset: 37.5             # switch centre relative to the camera centre
 #   y_offset: 0
@@ -24,11 +24,11 @@
 #   max_travel: 15             # how far down to look for the switch in mm
 #
 # Commands:
-#   VAOC_Z_PROBE [PROBE_SPEED=] [LIFT_SPEED=] [SAMPLES=] [SAMPLE_RETRACT_DIST=]
+#   MOSAIC_Z_PROBE [PROBE_SPEED=] [LIFT_SPEED=] [SAMPLES=] [SAMPLE_RETRACT_DIST=]
 #                [SAMPLES_TOLERANCE=] [SAMPLES_TOLERANCE_RETRIES=]
 #                [SAMPLES_RESULT=] [MAX_TRAVEL=] [SAMPLES_DROP=]
-#   VAOC_Z_QUERY             state of the switch
-#   VAOC_Z_PROBE_ACCURACY    repeatability test at the current XY position
+#   MOSAIC_Z_QUERY             state of the switch
+#   MOSAIC_Z_PROBE_ACCURACY    repeatability test at the current XY position
 
 import logging
 
@@ -39,7 +39,7 @@ too small, or the Z axis minimum position does not allow enough travel
 """
 
 
-class VaocZProbe:
+class MosaicZProbe:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name()
@@ -68,13 +68,13 @@ class VaocZProbe:
         self.mcu_endstop = ppins.setup_pin("endstop", config.get("pin"))
         self.printer.register_event_handler("klippy:mcu_identify",
                                             self._handle_mcu_identify)
-        self.gcode.register_command("VAOC_Z_PROBE", self.cmd_VAOC_Z_PROBE,
-                                    desc=self.cmd_VAOC_Z_PROBE_help)
-        self.gcode.register_command("VAOC_Z_QUERY", self.cmd_VAOC_Z_QUERY,
-                                    desc=self.cmd_VAOC_Z_QUERY_help)
+        self.gcode.register_command("MOSAIC_Z_PROBE", self.cmd_MOSAIC_Z_PROBE,
+                                    desc=self.cmd_MOSAIC_Z_PROBE_help)
+        self.gcode.register_command("MOSAIC_Z_QUERY", self.cmd_MOSAIC_Z_QUERY,
+                                    desc=self.cmd_MOSAIC_Z_QUERY_help)
         self.gcode.register_command(
-            "VAOC_Z_PROBE_ACCURACY", self.cmd_VAOC_Z_PROBE_ACCURACY,
-            desc=self.cmd_VAOC_Z_PROBE_ACCURACY_help)
+            "MOSAIC_Z_PROBE_ACCURACY", self.cmd_MOSAIC_Z_PROBE_ACCURACY,
+            desc=self.cmd_MOSAIC_Z_PROBE_ACCURACY_help)
 
     def _handle_mcu_identify(self):
         kin = self.printer.lookup_object("toolhead").get_kinematics()
@@ -100,7 +100,7 @@ class VaocZProbe:
             raise self.printer.command_error(reason)
         toolhead.set_position(epos)
         self.printer.lookup_object("gcode_move").reset_last_position()
-        self.gcode.respond_info("VAOC switch at %.3f,%.3f triggered at z=%.6f"
+        self.gcode.respond_info("MOSAIC switch at %.3f,%.3f triggered at z=%.6f"
                                 % (epos[0], epos[1], epos[2]))
         return epos[:3]
 
@@ -151,9 +151,9 @@ class VaocZProbe:
             if max(zs) - min(zs) > tolerance:
                 if retries >= retries_max:
                     raise gcmd.error(
-                        "VAOC switch samples exceed samples_tolerance "
+                        "MOSAIC switch samples exceed samples_tolerance "
                         "(%.4f > %.4f)" % (max(zs) - min(zs), tolerance))
-                gcmd.respond_info("VAOC switch samples exceed tolerance, "
+                gcmd.respond_info("MOSAIC switch samples exceed tolerance, "
                                   "retrying...")
                 retries += 1
                 zs = []
@@ -163,29 +163,29 @@ class VaocZProbe:
         self.last_range = max(zs) - min(zs)
         return self._median(zs) if method == "median" else self._mean(zs)
 
-    cmd_VAOC_Z_PROBE_help = ("Press the VAOC Z switch with the nozzle and "
+    cmd_MOSAIC_Z_PROBE_help = ("Press the MOSAIC Z switch with the nozzle and "
                              "report the toolhead Z where it triggers")
 
-    def cmd_VAOC_Z_PROBE(self, gcmd):
+    def cmd_MOSAIC_Z_PROBE(self, gcmd):
         z = self.run_probe(gcmd)
         self.last_z_result = z
-        gcmd.respond_info("VAOC Z result is z=%.6f (sample range %.4f)"
+        gcmd.respond_info("MOSAIC Z result is z=%.6f (sample range %.4f)"
                           % (z, self.last_range))
 
-    cmd_VAOC_Z_QUERY_help = "Report whether the VAOC Z switch is triggered"
+    cmd_MOSAIC_Z_QUERY_help = "Report whether the MOSAIC Z switch is triggered"
 
-    def cmd_VAOC_Z_QUERY(self, gcmd):
+    def cmd_MOSAIC_Z_QUERY(self, gcmd):
         toolhead = self.printer.lookup_object("toolhead")
         print_time = toolhead.get_last_move_time()
         res = self.mcu_endstop.query_endstop(print_time)
         self.last_state = bool(res)
-        gcmd.respond_info("VAOC Z switch: %s" % (
+        gcmd.respond_info("MOSAIC Z switch: %s" % (
             "TRIGGERED" if res else "open",))
 
-    cmd_VAOC_Z_PROBE_ACCURACY_help = ("Repeatability test of the VAOC Z "
+    cmd_MOSAIC_Z_PROBE_ACCURACY_help = ("Repeatability test of the MOSAIC Z "
                                       "switch at the current XY position")
 
-    def cmd_VAOC_Z_PROBE_ACCURACY(self, gcmd):
+    def cmd_MOSAIC_Z_PROBE_ACCURACY(self, gcmd):
         speed = gcmd.get_float("PROBE_SPEED", self.speed, above=0.0)
         lift_speed = gcmd.get_float("LIFT_SPEED", self.lift_speed, above=0.0)
         count = gcmd.get_int("SAMPLES", 10, minval=2)
@@ -195,7 +195,7 @@ class VaocZProbe:
         toolhead = self.printer.lookup_object("toolhead")
         start = toolhead.get_position()
         xy = start[:2]
-        gcmd.respond_info("VAOC_Z_PROBE_ACCURACY at X:%.3f Y:%.3f Z:%.3f "
+        gcmd.respond_info("MOSAIC_Z_PROBE_ACCURACY at X:%.3f Y:%.3f Z:%.3f "
                           "(samples=%d retract=%.3f speed=%.1f)"
                           % (start[0], start[1], start[2], count, retract,
                              speed))
@@ -207,7 +207,7 @@ class VaocZProbe:
         avg = self._mean(zs)
         sigma = (sum((z - avg) ** 2 for z in zs) / len(zs)) ** 0.5
         gcmd.respond_info(
-            "VAOC switch accuracy: maximum %.6f, minimum %.6f, range %.6f, "
+            "MOSAIC switch accuracy: maximum %.6f, minimum %.6f, range %.6f, "
             "average %.6f, median %.6f, standard deviation %.6f"
             % (max(zs), min(zs), max(zs) - min(zs), avg, self._median(zs),
                sigma))
@@ -223,4 +223,4 @@ class VaocZProbe:
 
 
 def load_config(config):
-    return VaocZProbe(config)
+    return MosaicZProbe(config)

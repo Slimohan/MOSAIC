@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# Small web server for the VAOC alignment page. Standard library only.
+# Small web server for the MOSAIC alignment page. Standard library only.
 #
-#   python3 vaoc_server.py [--port 8099] [--moonraker http://127.0.0.1:7125]
+#   python3 mosaic_server.py [--port 8099] [--moonraker http://127.0.0.1:7125]
 #
 # Serves index.html and forwards a short list of Moonraker requests, so the
 # page needs no CORS setup in Moonraker. Anyone who can open the page can move
 # the printer, so run it only on a trusted network.
 #
-# Part of klipper-vaoc, GPL-3.0.
+# Part of klipper-mosaic, GPL-3.0.
 
 import argparse
 import http.server
@@ -29,7 +29,7 @@ ALLOWED = (
 
 def make_handler(moonraker):
     class Handler(http.server.BaseHTTPRequestHandler):
-        server_version = "vaoc-ui"
+        server_version = "mosaic-ui"
 
         def log_message(self, fmt, *args):
             pass
@@ -88,7 +88,7 @@ def main():
     a = ap.parse_args()
     srv = http.server.ThreadingHTTPServer((a.bind, a.port),
                                           make_handler(a.moonraker.rstrip("/")))
-    print("VAOC page on port %d, Moonraker at %s" % (a.port, a.moonraker))
+    print("MOSAIC page on port %d, Moonraker at %s" % (a.port, a.moonraker))
     srv.serve_forever()
 
 
