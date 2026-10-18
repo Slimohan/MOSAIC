@@ -21,6 +21,29 @@ or Kalico. It does not depend on MadMax itself, only on klipper-toolchanger's to
 MOSAIC is based on the VAOC macros of RatOS and the probe code of Klipper. It is **not** automatic nozzle
 detection: like the RatOS VAOC, you do the centring by eye (a few clicks per tool).
 
+## Screenshots
+
+<p align="center">
+  <img alt="MOSAIC Tools tab with ten tool cards" src="assets/screenshots/tools.png" width="760">
+</p>
+
+The Tools tab: one card per tool with temperature, standby, fan, offsets, mount, dock and align.
+
+<p align="center">
+  <img alt="MOSAIC Alignment tab with camera view and arrow pad" src="assets/screenshots/alignment.png" width="760">
+</p>
+
+The Alignment tab: camera view with crosshair, tool buttons, move pad, Z switch and the saved offsets.
+
+<p align="center">
+  <img alt="MOSAIC Tools tab on a phone" src="assets/screenshots/tools-phone.png" width="300">
+</p>
+
+The same page on a phone.
+
+These screenshots show the real page running against a simulated printer: the temperatures, offsets and the nozzle
+picture are made-up demo data, not a real machine or camera.
+
 ## What is in the package
 
 | File | What it does |
