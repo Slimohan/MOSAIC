@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/mosaic-logo-dark.svg">
-    <img alt="MOSAIC" src="assets/mosaic-logo-light.svg" width="460">
-  </picture>
+  <img alt="MOSAIC" src="assets/mosaic-logo.png" width="420">
 </p>
 
 # MOSAIC: Multi-Tool Offset Alignment & Integrated Calibration
@@ -33,7 +30,7 @@ detection: like the RatOS VAOC, you do the centring by eye (a few clicks per too
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `klippy_extras/mosaic_z_probe.py` | Klipper module for the Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | Optional web page: a Tools tab (heaters, fans, mount, offsets) and an Alignment tab (camera, crosshair, arrows). |
-| `assets/` | The logo (SVG and PNG, light and dark), and a 1280x640 social preview image. |
+| `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
 | `examples/` | Hardware sections, a `printer.cfg` example and the Mainsail menu entry. |
 | `install.sh` | Links the module into Klipper and Kalico. |
 
