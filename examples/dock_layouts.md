@@ -56,13 +56,13 @@ Pickup: after seating, rise 12 mm at 6 mm/s, then back out 25 mm at the pullout 
 
 ## 6. Check the tool before leaving the dock
 
-Add `v` as the fifth field of the pickup step where the pin should already show the tool:
+Add `v` as the fifth field of the pickup step where the carriage switch should already show the tool:
 
 ```
 variable_pickup_out: "0,0,12,6,v/0,-25,12"
 ```
 
-If the pin does not show the tool there, klipper-toolchanger raises an error before the carriage drags anything away. Needs a `detection_pin` on the tools. Nothing happens when no pin is configured.
+If the switch does not show the tool there, the change stops with an error before the carriage drags anything away. Without a carriage switch (`mosaic_head`) it falls back to klipper-toolchanger's `VERIFY_TOOL_DETECTED`, which does nothing when the tools have no detection pin.
 
 ## 7. Different path for one dock only
 

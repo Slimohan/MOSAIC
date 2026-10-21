@@ -19,7 +19,27 @@ dropoff_gcode:
 tool_number: 0
 # extruder / heater / fan / detection_pin ... as in your hardware config
 
-# Optional but recommended: lets the toolchanger check that the tool is on the
-# carriage after a pickup (needs a detection_pin on each tool).
-# [toolchanger]
-# verify_tool_pickup: True
+# Tool switches. Pressed = tool present (add ! to the pin if yours is the other way).
+# The names are fixed, see README "Tool switches". Replace the pins with yours.
+
+# One switch on the carriage, pressed while any tool is attached.
+# release_gcode pauses a running print if the tool falls off.
+[gcode_button mosaic_head]
+pin: ^PA1
+debounce_delay: 0.1
+press_gcode:
+release_gcode:
+    MOSAIC_DOCK_HEAD_RELEASED
+
+# One switch per dock, pressed while its tool sits in the dock.
+[gcode_button mosaic_dock_t0]
+pin: ^PA2
+debounce_delay: 0.1
+press_gcode:
+
+[gcode_button mosaic_dock_t1]
+pin: ^PA3
+debounce_delay: 0.1
+press_gcode:
+
+# ... and so on for the other tools: mosaic_dock_t2 to mosaic_dock_t9

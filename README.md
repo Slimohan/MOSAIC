@@ -11,7 +11,7 @@ It is the missing piece in the MOSAIC family: [MOSAIC](https://github.com/Slimoh
 - The coupling is **passive**: no motor, servo or pneumatic lock. Picking up and dropping off is only carriage motion. The dock holds the tool and the carriage takes it (or leaves it) by moving in and out along a path. If your mechanism has an actuator, these macros do not drive it.
 - Positions are raw carriage coordinates in mm. Z is up.
 - The carriage can travel sideways over all docks at one "safe" height.
-- Tool detection pins are optional. If you have them, klipper-toolchanger's own `verify_tool_pickup` runs after every pickup, and you can add extra checks in the middle of the exit path.
+- Switches are optional but recommended: **one switch on the carriage** that is pressed while any tool is attached, and **one switch per dock** that is pressed while its tool sits in the dock. See [Tool switches](#tool-switches).
 
 ## What it does
 
@@ -21,8 +21,9 @@ A pickup of tool `n` does this, every number from your settings:
 2. Travel sideways at that height to the first step of the approach path, go down there.
 3. Walk the approach path, the last move into the dock position is slow (`engage_speed`).
 4. Wait `seat_dwell` ms.
-5. Walk the exit path out of the dock, slowly (`pullout_speed`), optionally checking the tool detection pin on the way.
-6. Go up to `safe_z`, then sideways to where the print was, then down. (Only if you pass the restore position, see below.)
+5. Walk the exit path out of the dock, slowly (`pullout_speed`), optionally checking the carriage switch on the way.
+6. Once the carriage is out, read both switches and compare with what must be true now (see [Tool switches](#tool-switches)).
+7. Go up to `safe_z`, then sideways to where the print was, then down. (Only if you pass the restore position, see below.)
 
 A drop-off is the same with its own exit path. It is called for the old tool first and for the new tool second during `T1`, `SELECT_TOOL` and so on, all handled by klipper-toolchanger.
 
@@ -32,6 +33,7 @@ Safety built in:
 - Before any motion, the whole plan is checked: every step must be a valid `dx,dy,dz`, inside the printer's axis limits, speeds above zero. A typo is an error message, not a crash into the frame.
 - The macros refuse to move unless the toolchanger is in the `changing` state (a tool change, or after `ENTER_DOCKING_MODE`). That is the state where tool offsets are switched off, so the numbers mean the same thing every time.
 - Every command takes `DRY=1` and then only prints the moves it would make.
+- With the switches wired, a missing, stuck or dropped tool stops the change with a plain message instead of carrying on.
 
 ## Install
 
@@ -82,6 +84,8 @@ Open `mosaic_dock_positions.cfg`. Part 1 has the shared settings, part 2 has one
 | `pullout_speed` | Moves out of the dock, mm/s. Keep it slow. |
 | `seat_dwell` | Pause when seated, ms |
 | `restore_move` | `1` = after the change go back to the print position safely (sideways at safe height first, then down) |
+| `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
+| `switch_settle` | Wait in ms after the carriage stops before reading the switches |
 | `approach` | Default approach path for all docks, see [Paths](#paths) |
 | `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the approach path backwards. |
 
@@ -116,6 +120,43 @@ Adjust with `MOSAIC_DOCK_SET T=2 PARK_X=101.2 PARK_Y=280.4` until it is right (v
 3. Put the speeds at about half of what you want in the end. Run `T0` with your hand on the emergency stop and watch the carriage. (`ENTER_DOCKING_MODE` followed by klipper-toolchanger's `TEST_TOOL_DOCKING` docks and picks up the current tool again, if you prefer that.)
 4. Then `T1`, `T0` back and forth, then the other tools, then raise the speeds step by step.
 
+## Tool switches
+
+Two kinds of switch, both read as `[gcode_button]` so Klipper and Kalico treat them the same. Wire them so the button is **pressed when a tool is present** (put `!` in front of the pin if yours works the other way round).
+
+```
+# One switch on the carriage: pressed while any tool is attached
+[gcode_button mosaic_head]
+pin: ^PA1
+press_gcode:
+release_gcode:
+    MOSAIC_DOCK_HEAD_RELEASED
+
+# One switch per dock: pressed while that tool sits in its dock
+[gcode_button mosaic_dock_t0]
+pin: ^PA2
+press_gcode:
+```
+
+The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. A full example is in [`examples/printer.cfg.example`](examples/printer.cfg.example).
+
+**At the dock** (what these macros do, with `check_switches: 1`):
+
+| Moment | Dock switch | Carriage switch |
+|---|---|---|
+| before a pickup | tool present | empty |
+| before a drop-off | empty | tool present |
+| after a pickup | empty | tool present |
+| after a drop-off | tool present | empty |
+
+If a check fails the change stops with an error that says what the combination means, for example *"T3 stayed in its dock, the coupling did not take it"*, *"T3 is neither in the dock nor on the carriage, it may have dropped on the way out"* or *"both switches show the tool, check the wiring"*. Before-checks run before anything moves. After-checks run when the carriage is out of the dock, before it travels on, so the carriage stays in free space next to the dock. The step marker `v` in a pickup exit path (see [Paths](#paths)) checks the carriage switch partway out of the dock.
+
+**While printing:** continuous watching is not the job of a dock macro. `MOSAIC_DOCK_HEAD_RELEASED` (called from the `release_gcode` above) reports and pauses a running print if the carriage switch lets go while a tool is selected and no tool change is running. Give the switch a debounce (`debounce_delay: 0.1`) so vibration does not trigger it.
+
+**Why not klipper-toolchanger's own `detection_pin`?** It is made for one switch per tool, so it tells the tools apart. You have one switch on the carriage, which can only say "a tool is attached", and these macros already know which tool they expect. Leave `detection_pin` out of the `[tool]` sections unless every tool has its own, and then both can be used together.
+
+`MOSAIC_DOCK_SWITCHES` prints what every switch reads right now: press them by hand to test the wiring. `MOSAIC_DOCK_PICKUP T=n DRY=1` also prints the before-check against the current readings.
+
 ## Paths
 
 A path is a text of steps, separated by `/`. Each step is `dx,dy,dz` in mm **relative to the dock position**, optionally followed by a speed and a check flag:
@@ -125,7 +166,7 @@ dx,dy,dz[,speed[,v]]
 ```
 
 - `speed` in mm/s, empty = the default for that kind of move.
-- `v` in a pickup exit path: run `VERIFY_TOOL_DETECTED` after that step (does nothing when the tool has no detection pin).
+- `v` in a pickup exit path: check right after that step that the carriage switch shows a tool. Without a carriage switch it runs `VERIFY_TOOL_DETECTED` instead, which does nothing when the tools have no detection pin.
 - The last move of the approach goes to the dock position itself, you do not write it.
 - The **first approach step must be in free space** where the carriage can come down from `safe_z`.
 - If an exit path is empty, the approach path is walked backwards (speeds in the approach are ignored on the way out).
@@ -143,7 +184,9 @@ The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), 
 | `MOSAIC_DOCK_GOTO T=n WHERE=stage\|park` | Drive to a dock to check it (docking mode needed) |
 | `MOSAIC_DOCK_LEAVE T=n MODE=pickup\|dropoff` | Walk out of a dock |
 | `MOSAIC_DOCK_SHOW [T=n]` | Print settings and paths |
-| `MOSAIC_DOCK_CHECK` | Check every tool of the toolchanger: dock set up, paths valid, hooks present |
+| `MOSAIC_DOCK_SWITCHES` | Print the current reading of the carriage switch and all dock switches |
+| `MOSAIC_DOCK_HEAD_RELEASED` | For the `release_gcode` of the carriage switch: pause the print if a selected tool falls off |
+| `MOSAIC_DOCK_CHECK` | Check every tool of the toolchanger: dock set up, paths valid, hooks present, which switches exist |
 
 ## Using it with MOSAIC
 
@@ -151,7 +194,7 @@ The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), 
 
 ## Limits, honestly
 
-- **No hardware test yet.** Simulation shows the moves and the error handling, it cannot show if the coupling seats. Expect to adjust the paths, speeds and the dwell.
+- **No hardware test yet.** Simulation shows the moves and the error handling, it cannot show if the coupling seats. The switch checks were tested with simulated switches that flip at the right moment, not with real ones, so wiring, polarity and debounce need checking on the machine (`MOSAIC_DOCK_SWITCHES`). Expect to adjust the paths, speeds and the dwell.
 - **No actuator.** If your coupling needs a latch, magnet release or pin to be driven, that is outside this package.
 - **No smoothing.** Moves are plain `G0` with stops at the corners. That is on purpose for slow, controlled docking, but it is slower than the rounded paths of some other toolchanger setups.
 - **Dock geometry is yours.** The macros cannot know where walls and neighbouring docks are. `safe_z` and the first approach step must be in free space. Axis limits are checked, collisions are not.
