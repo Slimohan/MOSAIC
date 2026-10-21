@@ -184,6 +184,34 @@ mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define
 Klipper does not complain but merges them, and the file included last silently wins (I tried it). This file calls the
 Beacon offset update itself when the Beacon macros are loaded, so leave the Beacon hooks file out.
 
+## Docking: what MOSAIC expects from your tool changer
+
+MOSAIC does not contain the macros that drop off and pick up a tool. Every tool change goes through
+klipper-toolchanger's `SELECT_TOOL` (and `UNSELECT_TOOL` for the Dock button), and klipper-toolchanger runs the docking
+motion from the `pickup_gcode` and `dropoff_gcode` of your `[tool Tn]` sections. Options you put in `[toolchanger]` are
+the defaults for all tools, and an option that is present but empty in a tool section overrides that default. Those
+macros come from your changer's own configuration, not from this package.
+
+`MOSAIC_CHECK` prints a `WARN` line for every tool that has no `pickup_gcode` or `dropoff_gcode`. It is a warning
+and not a failure, because only you know whether a tool really needs them, but a real changer does: without them a
+tool change only switches klipper-toolchanger's state and the toolhead does not move to the dock.
+
+What the MOSAIC macros assume, so your dock macros and settings have to fit:
+
+- **Every calibration step uses the dock macros.** `MOSAIC_LOAD_TOOL T=n` puts the current tool back and picks tool n.
+  `MOSAIC_CALIBRATE_Z` mounts every tool in turn, and `MOSAIC_END` mounts the reference tool. With ten tools a full Z
+  measurement is ten pickup and dropoff cycles, so test the docking on its own first.
+- **After a tool change the tool is mounted and the toolhead is clear of the dock.** MOSAIC then raises to `safe_z`
+  and travels to the camera or the switch.
+- **`safe_z` must clear everything on the way**: the docks, the tools that are parked, the camera housing and the
+  switch. It is a setting in `_MOSAIC_SETTINGS`. Start high.
+- **Home first.** The macros need homed axes, as the docking does.
+- **Errors reset the mounted tool.** A failed pickup or dropoff makes klipper-toolchanger forget which tool is
+  mounted. After a failure, fix it by hand and run `INITIALIZE_TOOLCHANGER` before continuing.
+
+A sensible first test order on the printer: `G28`, `SELECT_TOOL T=0`, `SELECT_TOOL T=1`, `SELECT_TOOL T=0`
+(watch the dock each time), then `MOSAIC_CHECK`, and only then `MOSAIC_START`.
+
 ## Commands
 
 | Command | Meaning |
@@ -195,7 +223,7 @@ Beacon offset update itself when the Beacon macros are loaded, so leave the Beac
 | `MOSAIC_END` | Finish, mount the reference tool, LED off. |
 | `MOSAIC_CALIBRATE_Z [TEMP=]` | Measure the Z offset of all tools on the switch. |
 | `MOSAIC_AUTO_Z_OFFSET [TEMP=]` | Same, meant for `PRINT_START` after homing. |
-| `MOSAIC_ECHO_OFFSETS`, `MOSAIC_RESET_OFFSETS [T=]`, `MOSAIC_APPLY_OFFSETS`, `MOSAIC_CHECK` | Utilities. `MOSAIC_CHECK` also checks the heater of every tool and that `T0` ... `T9` are the MOSAIC macros. |
+| `MOSAIC_ECHO_OFFSETS`, `MOSAIC_RESET_OFFSETS [T=]`, `MOSAIC_APPLY_OFFSETS`, `MOSAIC_CHECK` | Utilities. `MOSAIC_CHECK` also checks the heater of every tool, that `T0` ... `T9` are the MOSAIC macros, and warns about tools without `pickup_gcode` or `dropoff_gcode`. |
 | `MOSAIC_Z_QUERY`, `MOSAIC_Z_PROBE`, `MOSAIC_Z_PROBE_ACCURACY` | The switch module. Use the last one to check its repeatability. |
 
 Wrong input (a move that is too large, no session, a missing tool) only prints a warning and does nothing.

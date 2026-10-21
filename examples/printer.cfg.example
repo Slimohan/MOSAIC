@@ -46,7 +46,10 @@ variable_z_cal_temp: 0
 #tool_number: 0
 #heater: heater_generic hotend0
 #fan: fan_generic fan0
-#...pickup_gcode, dropoff_gcode as for your changer
+#pickup_gcode:
+#    ...the dock sequence of your changer, MOSAIC does not provide it (see README: Docking)
+#dropoff_gcode:
+#    ...
 #
 # (repeat for T1 ... T9)
 
