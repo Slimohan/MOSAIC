@@ -18,11 +18,18 @@ variable_reference_tool: 0
 # tool_parameter for klipper-toolchanger 2025.12.26 or newer,
 # gcode_offset if your tool change macros call SET_GCODE_OFFSET from t<N>_offset_x/y/z
 variable_offset_method: 'tool_parameter'
-variable_camera_x: 100.0
-variable_camera_y: 30.0
-variable_focus_z: 8.0
+# Where the nozzle of the reference tool hangs just above the middle of the
+# Nudge pin (gcode coordinates). The nozzle tip must be well above the pin.
+# 1 to 2 mm off is fine, the probing finds the centre itself.
+variable_nudge_x: 150.0
+variable_nudge_y: 5.0
+variable_nudge_z: 15.0
 variable_safe_z: 30.0
-variable_z_cal_temp: 0
+# 0 = measure cold. 150 = heat every nozzle to 150 C first.
+variable_cal_temp: 0
+# Only with a separate Z switch ([mosaic_z_probe] in the hardware file):
+#variable_z_switch_x: 60.0
+#variable_z_switch_y: 20.0
 
 # Optional, only with mosaic_tools.cfg:
 # [gcode_macro _MOSAIC_TOOLS_SETTINGS]
@@ -53,5 +60,8 @@ variable_z_cal_temp: 0
 #
 # (repeat for T1 ... T9)
 
-# Optional: measure Z at every print start. Call this after G28 in PRINT_START.
+# Calibrate everything: home first, then
+#   MOSAIC_CALIBRATE
+#
+# Optional: measure only Z at every print start. Call this after G28 in PRINT_START.
 #   MOSAIC_AUTO_Z_OFFSET

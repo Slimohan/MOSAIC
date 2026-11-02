@@ -1,10 +1,10 @@
-# Z offset switch of the MOSAIC camera module
+# Optional Z offset switch of MOSAIC
 #
 # Adapted from RatOS z_offset_probe.py, Copyright (C) 2017-2021 Kevin O'Connor
 # <kevin@koconnor.net> and Helge Keck <HelgeKeck@hotmail.com>. This standalone
 # version for Klipper and Kalico does not depend on Klipper's probe module, so
 # it can live next to a Beacon, Cartographer or any other [probe]. It drives a
-# plain switch (the MOSAIC Z switch) that the nozzle presses from above and
+# plain switch (the optional MOSAIC Z switch) that the nozzle presses from above and
 # reports the toolhead Z at which it triggers.
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
@@ -12,8 +12,6 @@
 # Config:
 #   [mosaic_z_probe]
 #   pin: ^PA3                  # switch pin
-#   x_offset: 37.5             # switch centre relative to the camera centre
-#   y_offset: 0
 #   speed: 3                   # probing speed in mm/s
 #   lift_speed: 10
 #   samples: 5
@@ -44,8 +42,6 @@ class MosaicZProbe:
         self.printer = config.get_printer()
         self.name = config.get_name()
         self.gcode = self.printer.lookup_object("gcode")
-        self.x_offset = config.getfloat("x_offset", 0.0)
-        self.y_offset = config.getfloat("y_offset", 0.0)
         self.speed = config.getfloat("speed", 3.0, above=0.0)
         self.lift_speed = config.getfloat("lift_speed", self.speed, above=0.0)
         self.sample_count = config.getint("samples", 3, minval=1)
@@ -217,9 +213,7 @@ class MosaicZProbe:
                 "last_query": self.last_state,
                 "last_z_result": self.last_z_result,
                 "last_range": self.last_range,
-                "last_retries": self.last_retries,
-                "x_offset": self.x_offset,
-                "y_offset": self.y_offset}
+                "last_retries": self.last_retries}
 
 
 def load_config(config):

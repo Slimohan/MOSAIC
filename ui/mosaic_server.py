@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Small web server for the MOSAIC alignment page. Standard library only.
+# Small web server for the MOSAIC web page. Standard library only.
 #
 #   python3 mosaic_server.py [--port 8099] [--moonraker http://127.0.0.1:7125]
 #
@@ -22,7 +22,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ALLOWED = (
     "/printer/gcode/script",
     "/printer/objects/query",
-    "/server/webcams/list",
     "/printer/info",
 )
 

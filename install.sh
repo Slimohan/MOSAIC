@@ -21,4 +21,4 @@ for tree in "$@"; do
 done
 [ $found -eq 1 ] || { echo "no klippy/extras folder found, pass the path to Klipper or Kalico"; exit 1; }
 echo "Next: add [include mosaic/mosaic.cfg] to printer.cfg and restart Klipper."
-echo "Alignment page: see README.md, section 'The alignment page'."
+echo "Web page: see README.md, section 'The web page'."
