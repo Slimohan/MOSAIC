@@ -44,22 +44,25 @@ variable_cal_temp: 0
 # variable_standby_temp: 150.0
 # variable_wait_on_select: True
 
-# Hotend swapper with one shared extruder: every tool has its own heater and fan.
+# Hotend swapper with one shared extruder motor: every tool has its own heater,
+# thermistor and fan (README: "A hotend swapper with one extruder").
 # The tool sections come AFTER the includes above.
-#[extruder]
-#...the one extruder with the stepper, see the note about min_extrude_temp in README.md
+#[extruder_stepper shared_drive]
+#extruder: extruder
+#...step_pin, dir_pin, enable_pin, rotation_distance of the one extruder motor
 #
-#[heater_generic hotend0]
-#...heater_pin, sensor_type, sensor_pin, control, min_temp, max_temp
-#[fan_generic fan0]
+#[extruder]
+#...tool 0: heater_pin, sensor_type, sensor_pin, control, min_temp, max_temp
+#...(no step_pin: heater only)
+#[heater_fan t0_hotend_fan]
 #pin: ...
+#heater: extruder
 #
 #[tool T0]
 #tool_number: 0
-#heater: heater_generic hotend0
-#fan: fan_generic fan0
+#extruder: extruder
 #
-# (repeat for T1 ... T9)
+# (repeat for T1 ... T9 with [extruder1] ... [extruder9])
 # The tools do NOT need their own pickup_gcode / dropoff_gcode, they use the
 # ones in [toolchanger] below. An own line (even an empty "pickup_gcode:")
 # overrides it.
@@ -68,6 +71,9 @@ variable_cal_temp: 0
 # The long {% if %} parts hand over the position the print was at, so that the
 # dock macros can go back there safely (sideways at safe height, then down).
 [toolchanger]
+# Hotend swapper only: hand the shared extruder motor to the mounted tool.
+#after_change_gcode:
+#    SYNC_EXTRUDER_MOTION EXTRUDER=shared_drive MOTION_QUEUE={tool.extruder}
 pickup_gcode:
     MOSAIC_DOCK_PICKUP T={tool.tool_number}{% if 'X' in restore_position %} RX={restore_position.X}{% endif %}{% if 'Y' in restore_position %} RY={restore_position.Y}{% endif %}{% if 'Z' in restore_position %} RZ={restore_position.Z}{% endif %}
 dropoff_gcode:
