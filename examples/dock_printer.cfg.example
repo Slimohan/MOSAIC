@@ -1,0 +1,45 @@
+# Example: how the MOSAIC dock macros are connected to klipper-toolchanger.
+# Merge this into your own printer.cfg, do not copy it over.
+
+[include mosaic/mosaic_dock.cfg]
+[include mosaic/mosaic_dock_positions.cfg]
+
+[toolchanger]
+# Keep your other [toolchanger] options. These two lines are the hook.
+# The long {% if %} parts hand over the position the print was at, so that
+# the macros can go back there safely (sideways at safe height, then down).
+pickup_gcode:
+    MOSAIC_DOCK_PICKUP T={tool.tool_number}{% if 'X' in restore_position %} RX={restore_position.X}{% endif %}{% if 'Y' in restore_position %} RY={restore_position.Y}{% endif %}{% if 'Z' in restore_position %} RZ={restore_position.Z}{% endif %}
+dropoff_gcode:
+    MOSAIC_DOCK_DROPOFF T={tool.tool_number}{% if pickup_tool is none %}{% if 'X' in restore_position %} RX={restore_position.X}{% endif %}{% if 'Y' in restore_position %} RY={restore_position.Y}{% endif %}{% if 'Z' in restore_position %} RZ={restore_position.Z}{% endif %}{% endif %}
+
+# The tools do NOT need their own pickup_gcode/dropoff_gcode lines, they use
+# the ones above. An own line (even an empty "pickup_gcode:") overrides it.
+[tool T0]
+tool_number: 0
+# extruder / heater / fan / detection_pin ... as in your hardware config
+
+# Tool switches. Pressed = tool present (add ! to the pin if yours is the other way).
+# The names are fixed, see README "Tool switches". Replace the pins with yours.
+
+# One switch on the carriage, pressed while any tool is attached.
+# release_gcode pauses a running print if the tool falls off.
+[gcode_button mosaic_head]
+pin: ^PA1
+debounce_delay: 0.1
+press_gcode:
+release_gcode:
+    MOSAIC_DOCK_HEAD_RELEASED
+
+# One switch per dock, pressed while its tool sits in the dock.
+[gcode_button mosaic_dock_t0]
+pin: ^PA2
+debounce_delay: 0.1
+press_gcode:
+
+[gcode_button mosaic_dock_t1]
+pin: ^PA3
+debounce_delay: 0.1
+press_gcode:
+
+# ... and so on for the other tools: mosaic_dock_t2 to mosaic_dock_t9
