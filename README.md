@@ -76,25 +76,75 @@ made-up demo data, not a real machine.
 
 ## Installation
 
-1. Put this folder in your config folder as `mosaic`: `cd ~/printer_data/config && git clone https://github.com/Slimohan/MOSAIC mosaic`.
-2. Run `./install.sh`. It creates `mosaic_dock_positions.cfg` next to `printer.cfg` (never overwriting yours) and links
-   the Z switch module (only needed with a separate Z switch; it looks in `~/klipper` and `~/kalico`, pass a path if
-   yours differs).
-3. Add to `printer.cfg`:
-   ```
-   [include mosaic/mosaic.cfg]
-   [include mosaic/examples/mosaic_hardware.cfg]
-   [include mosaic/mosaic_tools.cfg]          # optional, BEFORE the [tool Tn] sections
-   [include mosaic/mosaic_dock.cfg]           # optional, docking
-   [include mosaic_dock_positions.cfg]        # with docking: your dock positions
-   ```
-   Then edit the hardware file: the Nudge pin and, if you have one, the Z switch. With docking, also add the
-   `pickup_gcode` / `dropoff_gcode` hooks to `[toolchanger]` and the switch sections, see
-   `examples/printer.cfg.example` and [docs/docking.md](docs/docking.md).
-4. Add a `[gcode_macro _MOSAIC_SETTINGS]` section **after** the include with at least `nudge_x`, `nudge_y` and
-   `nudge_z` (see "Setup, once"). List only the variables you want to change (see `examples/printer.cfg.example`). Every
-   setting is explained in `mosaic.cfg`.
-5. Restart Klipper and run `MOSAIC_CHECK`.
+Installing is a git clone, the installer, then a few lines in `printer.cfg`.
+
+**Before you start:** klipper-toolchanger has to be installed first, using its own installer. MOSAIC is built on it.
+
+### 1. Get the files
+
+On the printer's Pi or PC, over SSH:
+
+```
+cd ~/printer_data/config
+git clone https://github.com/Slimohan/MOSAIC mosaic
+```
+
+### 2. Run the installer
+
+```
+cd mosaic
+./install.sh
+```
+
+It does two things:
+
+- **Creates your dock positions file** (`mosaic_dock_positions.cfg`) next to `printer.cfg`. If one already exists it
+  leaves it alone and saves a fresh template beside it as `mosaic_dock_positions.cfg.new`.
+- **Links the optional Z switch module** into `~/klipper` or `~/kalico`. You only need this if you add the separate Z
+  switch. If your Klipper or Kalico is somewhere else, pass the path: `./install.sh /path/to/klipper`.
+
+If the `mosaic` folder is not inside your config folder, tell the installer where `printer.cfg` is:
+`CONF=/path/to/config ./install.sh`.
+
+### 3. Add MOSAIC to `printer.cfg`
+
+- **The includes,** in this order. `mosaic_tools.cfg` must come **before** your `[tool Tn]` sections, or Klipper stops
+  with `gcode command T0 already registered`:
+
+  ```
+  [include mosaic/mosaic.cfg]
+  [include mosaic/examples/mosaic_hardware.cfg]   # the Nudge probe and [save_variables]
+  [include mosaic/mosaic_tools.cfg]               # optional: T0 ... T9 and standby handling
+  [include mosaic/mosaic_tool_heaters.cfg]        # optional: M104 / M109 with T for slicers
+  [include mosaic/mosaic_dock.cfg]                # optional: docking
+  [include mosaic_dock_positions.cfg]             # with docking: your dock positions (created by install.sh)
+  ```
+
+  Then edit the hardware file: the Nudge pin and, if you have one, the Z switch.
+
+- **The dock hooks** in `[toolchanger]` (`pickup_gcode` and `dropoff_gcode`), plus the switch sections if you have
+  switches. Copy them from `examples/printer.cfg.example`; [docs/docking.md](docs/docking.md) explains them.
+
+- **A `[gcode_macro _MOSAIC_SETTINGS]` section**, placed **after** the includes, with at least the Nudge probe position
+  (`nudge_x`, `nudge_y`, `nudge_z`, see "Setup, once"). List only the variables you want to change; every setting is
+  explained in `mosaic.cfg`.
+
+`examples/printer.cfg.example` shows all of this together.
+
+### 4. Restart Klipper and run `MOSAIC_CHECK`
+
+It reports anything that is missing, including the docking (it runs `MOSAIC_DOCK_CHECK` at the end).
+
+### Optional: the web page
+
+The web page is set up by hand: copy `ui/mosaic-ui.service` into `/etc/systemd/system/`, edit the user and the path
+inside it, run `sudo systemctl enable --now mosaic-ui`, then open `http://<printer-address>:8099`. See
+"The web page" below.
+
+### Updating
+
+There is no Moonraker update manager entry yet, so to get a new version run `git pull` in the `mosaic` folder and
+restart Klipper. Your dock positions file lives outside that folder, so an update never touches it.
 
 ## Setup, once
 
