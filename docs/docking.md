@@ -1,8 +1,8 @@
-# MOSAIC toolchanger macros
+# MOSAIC docking
 
 Pick-up and drop-off macros for a **hotend-only toolchanger with a passive (Maxwell / kinematic) coupling**, built for [klipper-toolchanger](https://github.com/viesturz/klipper-toolchanger) on Klipper or Kalico. Each tool has its own dock section where you enter the position and, if the dock needs it, its own approach and exit path. Up to 10 tools (T0 to T9).
 
-It is the missing piece in the MOSAIC family: [MOSAIC](https://github.com/Slimohan/klipper-mosaic) aligns and calibrates the tools, this package moves the carriage in and out of the docks so there are tools to align.
+This is the docking part of MOSAIC. The calibration (`mosaic.cfg`) and the tool commands (`mosaic_tools.cfg`) use it for every tool change; it can also be used on its own. Back to the [main README](../README.md).
 
 > **Status: written and tested in simulation only.** The macros were run against the real klipper-toolchanger module in Klipper's and Kalico's batch mode (all planned moves checked, errors checked). They have **not** been run on a printer. Your dock geometry is not known to the macros, so the numbers in `mosaic_dock_positions.cfg` are placeholders until you teach them. Do the first runs slowly, hand on the power switch. See [Before the first real tool change](#before-the-first-real-tool-change).
 
@@ -37,25 +37,18 @@ Safety built in:
 
 ## Install
 
-1. Copy the files into your Klipper config folder, next to `printer.cfg`:
+Docking is installed with the rest of MOSAIC (see [Installation](../README.md#installation) in the main README):
 
-   ```
-   ./install.sh                 # copies into ~/printer_data/config/mosaic/
-   ./install.sh /path/to/config # or give the config folder
-   ```
-
-   The script always updates `mosaic_dock.cfg` (the engine) and only creates `mosaic_dock_positions.cfg` if it does not exist yet, so your numbers are never overwritten. A fresh copy of the positions file is stored as `mosaic_dock_positions.cfg.new` when yours already exists.
-
-   Or copy `mosaic_dock.cfg` and `mosaic_dock_positions.cfg` by hand into a `mosaic` folder.
+1. `./install.sh` creates `mosaic_dock_positions.cfg` in your config folder, next to `printer.cfg`, from the template in `examples/`. It never overwrites an existing one; a fresh template is saved as `mosaic_dock_positions.cfg.new` instead. The positions file lives outside the MOSAIC folder on purpose, so updating MOSAIC with `git pull` never touches your numbers.
 
 2. Add to `printer.cfg`:
 
    ```
    [include mosaic/mosaic_dock.cfg]
-   [include mosaic/mosaic_dock_positions.cfg]
+   [include mosaic_dock_positions.cfg]
    ```
 
-3. In your `[toolchanger]` section, add the two hooks (full copy-paste version in [`examples/printer.cfg.example`](examples/printer.cfg.example)):
+3. In your `[toolchanger]` section, add the two hooks (full copy-paste version in [`examples/printer.cfg.example`](../examples/printer.cfg.example)):
 
    ```
    [toolchanger]
@@ -67,7 +60,7 @@ Safety built in:
 
    A `[tool Tn]` section with its own `pickup_gcode` or `dropoff_gcode` overrides these, so remove those lines from the tools (an empty `pickup_gcode:` line counts as an override).
 
-4. Restart Klipper and run `MOSAIC_DOCK_CHECK`. It lists which tools have a dock set up and warns if the hooks are missing. Until you teach the docks it will report problems, which is correct.
+4. Restart Klipper and run `MOSAIC_CHECK`. It runs `MOSAIC_DOCK_CHECK` at the end, which lists which tools have a dock set up and warns if the hooks are missing. Until you teach the docks it will report problems, which is correct.
 
 ## Set up the docks
 
@@ -138,7 +131,7 @@ pin: ^PA2
 press_gcode:
 ```
 
-The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. A full example is in [`examples/printer.cfg.example`](examples/printer.cfg.example).
+The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. A full example is in [`examples/printer.cfg.example`](../examples/printer.cfg.example).
 
 **At the dock** (what these macros do, with `check_switches: 1`):
 
@@ -171,7 +164,7 @@ dx,dy,dz[,speed[,v]]
 - The **first approach step must be in free space** where the carriage can come down from `safe_z`.
 - If an exit path is empty, the approach path is walked backwards (speeds in the approach are ignored on the way out).
 
-The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), go to 5 mm in front, then slide in. Examples for other dock layouts (from above, sideways, lift-out, tool check partway) are in [`examples/dock_layouts.md`](examples/dock_layouts.md).
+The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), go to 5 mm in front, then slide in. Examples for other dock layouts (from above, sideways, lift-out, tool check partway) are in [`dock_layouts.md`](dock_layouts.md).
 
 ## Commands
 
@@ -188,9 +181,9 @@ The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), 
 | `MOSAIC_DOCK_HEAD_RELEASED` | For the `release_gcode` of the carriage switch: pause the print if a selected tool falls off |
 | `MOSAIC_DOCK_CHECK` | Check every tool of the toolchanger: dock set up, paths valid, hooks present, which switches exist |
 
-## Using it with MOSAIC
+## How the calibration uses it
 
-[MOSAIC](https://github.com/Slimohan/klipper-mosaic) needs working pickup and drop-off to move between tools for alignment. With this package installed, `MOSAIC_CHECK` stops warning about missing `pickup_gcode`/`dropoff_gcode`. Set `safe_z` here to a height that is also fine for MOSAIC's moves. Nothing else needs to be linked, the two packages only share the toolchanger.
+`MOSAIC_CALIBRATE` and the `T0` ... `T9` commands change tools through klipper-toolchanger's `SELECT_TOOL`, which runs these dock macros through the `[toolchanger]` hooks. `safe_z` here is the height for travel over the docks; `safe_z` in `_MOSAIC_SETTINGS` is the height for the calibration moves. Set both high enough to clear the docks, the parked tools and the Nudge.
 
 ## Limits, honestly
 
@@ -204,4 +197,4 @@ The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), 
 
 ## License
 
-GNU GPL v3, same as the rest of the MOSAIC family. See [LICENSE](LICENSE).
+GNU GPL v3, see [LICENSE](../LICENSE).
