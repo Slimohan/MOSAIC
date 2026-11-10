@@ -38,8 +38,6 @@ for tree in "$@"; do
     dest="$tree/klippy/extras"
     [ -d "$dest" ] || continue
     found=1
-    # the module was called vaoc_z_probe.py before the rename to MOSAIC
-    [ -L "$dest/vaoc_z_probe.py" ] && rm -f "$dest/vaoc_z_probe.py"
     for f in "$here"/klippy_extras/*.py; do
         name=$(basename "$f")
         rm -f "$dest/$name"

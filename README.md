@@ -25,9 +25,6 @@ stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-to
   path per dock, a teach command, and checks of a carriage switch and one switch per dock around every change.
   Leave it out if your changer brings its own dock macros. Details in [docs/docking.md](docs/docking.md).
 
-An earlier version of this package aligned the nozzles by eye with a camera. That is gone: the Nudge does it
-without anyone watching, so the camera, the LED ring and the alignment page were removed.
-
 ## Screenshots
 
 <p align="center">
@@ -57,10 +54,10 @@ made-up demo data, not a real machine.
 | `examples/mosaic_dock_positions.cfg` | Template for your dock positions. `install.sh` copies it next to `printer.cfg`. |
 | `docs/` | The docking guide and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
-| `ui/` | Optional web page: heaters, fans, mount, offsets and the calibration buttons. |
+| `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
-| `examples/` | Hardware sections, a `printer.cfg` example and the Mainsail menu entry. |
-| `install.sh` | Creates your dock positions file and links the Z switch module into Klipper and Kalico. |
+| `examples/` | Hardware sections, a `printer.cfg` example, the dock positions template and the Mainsail sidebar entry. |
+| `install.sh` | Creates your dock positions file, links the Z switch module, and sets up the web page with its Mainsail sidebar entry and update panel entry. |
 
 ## Requirements
 
@@ -73,6 +70,8 @@ made-up demo data, not a real machine.
   sit rigid: bolted to the bed frame or the printer, not on a flexing plate.
   Nudge needs about 6 mm of overtravel for the pin to wobble.
 - Optional: a switch for Z.
+- For the sidebar entry and the update panel: Mainsail and Moonraker (the standard KIAUH or MainsailOS setup), and
+  `sudo` rights for the installer.
 
 ## Installation
 
@@ -173,9 +172,40 @@ reports, so the calibration works with every configured tool; the ten comes from
 
 ### A hotend swapper with one extruder
 
-klipper-toolchanger does not need one `[extruder]` per tool. A tool can have its own heater next to a shared
-extruder. Give every tool a `heater:` (a `[heater_generic ...]` or an `[extruder...]` section) and a `fan:`
-(a `[fan_generic ...]`), and leave out `extruder:`:
+klipper-toolchanger does not need one extruder motor per tool. Every tool can have its own heater, thermistor and
+fan while one extruder motor is shared. There are two ways to set up the heaters; MOSAIC works with both.
+
+**Heater-only extruders (recommended).** Each tool gets an `[extruder]`, `[extruder1]`, ... section with only the
+heater and thermistor (no `step_pin`), and the one motor is an `[extruder_stepper]` that is handed to the mounted tool
+after every change:
+
+```
+[extruder_stepper shared_drive]
+extruder: extruder
+step_pin: ...          # the extruder motor on the mainboard
+...
+[extruder1]            # tool 1: heater and thermistor only
+heater_pin: ...
+sensor_type: ...
+sensor_pin: ...
+...
+[tool T1]
+tool_number: 1
+extruder: extruder1
+
+[toolchanger]
+after_change_gcode:
+    SYNC_EXTRUDER_MOTION EXTRUDER=shared_drive MOTION_QUEUE={tool.extruder}
+```
+
+Klipper's cold-extrusion check then works for every tool, and slicer lines like `M104 T1 S220` reach the right
+heater without `mosaic_tool_heaters.cfg` (include it anyway if you use the standby handling, see below). Use
+`after_change_gcode` as shown rather than klipper-toolchanger's own `extruder_stepper:` tool option: that option
+passes the full section name (`extruder_stepper shared_drive`) to `SYNC_EXTRUDER_MOTION`, which expects the short
+name, so the hand-over fails.
+
+**Generic heaters.** Each tool gets a `[heater_generic ...]` and the tool points at it with `heater:`; leave out
+`extruder:`:
 
 ```
 [heater_generic hotend0]
@@ -184,30 +214,28 @@ sensor_type: ...
 sensor_pin: ...
 control: pid
 ...
-[fan_generic fan0]
-pin: ...
-
 [tool T0]
 tool_number: 0
 heater: heater_generic hotend0
-fan: fan_generic fan0
 ```
 
 Things to know for this layout:
 
-- **Cold extrusion check.** Klipper checks `min_extrude_temp` against the heater of the one `[extruder]` section.
-  Klipper cannot take that check from a `heater_generic`, so with the heaters on the tools the `[extruder]`
-  heater has to be something real or `min_extrude_temp` has to be `0`. In the second case Klipper does not
-  stop a cold extrusion any more, so keep the temperature handling in your own macros or the slicer. I have
-  not tried this on your board; decide it with your hardware in mind.
-- **M104 / M109.** Klipper's own `M104` and `M109` only know the `[extruder]` heater, and
-  klipper-toolchanger does not wrap them. Slicer lines like `M104 T1 S220` therefore do nothing for a
-  `heater_generic` tool. Include `mosaic_tool_heaters.cfg` (see below) or let the slicer use
-  `SET_TOOL_TEMPERATURE T=1 TARGET=220` through its custom G-code.
-- **Fans.** `M106 S.. T..` and `M107 T..` are handled by klipper-toolchanger (its fan switcher) and need
-  `fan:` on the tool. Do not define a `[fan]` section next to tool fans; klipper-toolchanger refuses that.
+- **Cold extrusion check.** Klipper checks `min_extrude_temp` against the heater of the `[extruder]` section only,
+  never a `heater_generic`. So the `[extruder]` heater has to be something real, or `min_extrude_temp` has to be
+  `0`, and then Klipper no longer stops a cold extrusion: keep the temperature handling in your own macros or the
+  slicer.
+- **M104 / M109.** Klipper's own `M104` and `M109` only know `[extruder]` heaters, and klipper-toolchanger does not
+  wrap them. Slicer lines like `M104 T1 S220` therefore do nothing for a `heater_generic` tool. Include
+  `mosaic_tool_heaters.cfg` (see below) or let the slicer use `SET_TOOL_TEMPERATURE T=1 TARGET=220`.
+
+For both layouts:
+
+- **Fans.** A tool's `fan:` (a `[fan_generic ...]`) is its part-cooling fan: `M106 S.. T..` and `M107 T..` are
+  handled by klipper-toolchanger's fan switcher. Do not define a `[fan]` section next to tool fans; klipper-toolchanger
+  refuses that. A hotend (heat sink) fan per tool is a `[heater_fan]` with `heater:` set to that tool's heater.
 - **Beacon macros.** The thermal expansion offset of the Beacon macro set follows the `[extruder]` named in
-  `_BEACON_SETTINGS`, not the heater of the mounted tool. It is not correct for a `heater_generic` hotend.
+  `_BEACON_SETTINGS`, not the heater of the mounted tool.
 
 ### The T commands
 
@@ -244,7 +272,7 @@ frontends that read it.
 `mosaic_tool_heaters.cfg` wraps `M104` and `M109` so `T` selects the tool and no `T` means the mounted tool. Without
 a mounted tool and without `T` the original command runs. `M109` waits for the tool it names; it does not
 mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define the macros `M104` and `M109`,
-Klipper does not complain but merges them, and the file included last silently wins (I tried it). This file calls the
+Klipper does not complain but merges them, and the file included last silently wins. This file calls the
 Beacon offset update itself when the Beacon macros are loaded, so leave the Beacon hooks file out.
 
 ## Docking
@@ -382,14 +410,6 @@ The sidebar entry is a Mainsail feature. Fluidd users can open `http://<printer>
 **By hand, without the installer:** copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the
 path inside, run `sudo systemctl enable --now mosaic-ui`, and open `http://<printer-address>:8099`.
 
-## Coming from the camera version
-
-The camera, the LED ring, the Alignment page and the macros `MOSAIC_START`, `MOSAIC_LOAD_TOOL`, `MOSAIC_MOVE`,
-`MOSAIC_SET_TOOL` and `MOSAIC_END` are gone, together with the settings `camera_x`, `camera_y`, `focus_z`, the LED
-and camera cooling settings and the `x_offset` / `y_offset` of `[mosaic_z_probe]`. The saved tool offsets
-(`t<N>_offset_x/y/z`) keep their names and stay valid. The old `mosaic_ref_x/y/z` variables are not used any more and can
-be deleted from `variables.cfg`. Run `./install.sh` again.
-
 ## What was tested, and what was not
 
 Tested, on Klipper and on Kalico, in batch mode with the real klipper-toolchanger and a three tool test config. The
@@ -401,12 +421,13 @@ known heights), `z_source` selection, the `max_offset` refusal, missing settings
 Moonraker. The multi tool part (`T0` ... `T9`, standby, `M104` / `M109` with `T`) was tested on a ten tool config.
 The dock macros were tested the same way when they were a separate package (planned moves, errors, simulated
 switches); the combined package with the new `MOSAIC_CHECK` link and the new location of the positions file has not
-been run in batch mode yet.
+been run in batch mode yet. The page's `/mosaic/` route was tested through a real nginx in front of the page server;
+the installer itself has not been run on a real Pi.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
-probe has the sign convention that I read from the klipper-toolchanger code; whether the offsets come out with the
+probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
 right sign on a real printer needs the check described under "Sign convention". Waiting for temperatures
-(`WAIT=1`) cannot be checked in batch mode, fan speeds could not be read back, and the Mainsail menu entry was not tried
+(`WAIT=1`) cannot be checked in batch mode, fan speeds could not be read back, and the Mainsail sidebar entry was not tried
 in a real Mainsail. Nothing was tried on a real tool changer.
 
 The first run needs care: keep a hand near the emergency stop, start with `safe_z` generously high, check the Nudge
