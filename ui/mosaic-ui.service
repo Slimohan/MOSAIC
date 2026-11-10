@@ -1,5 +1,5 @@
 [Unit]
-Description=MOSAIC alignment page
+Description=MOSAIC tool page
 After=network.target moonraker.service
 
 [Service]
