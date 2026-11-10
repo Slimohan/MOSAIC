@@ -76,7 +76,7 @@ made-up demo data, not a real machine.
 
 ## Installation
 
-1. Put this folder in your config folder as `mosaic`: `cd ~/printer_data/config && git clone https://github.com/Slimohan/klipper-mosaic mosaic`.
+1. Put this folder in your config folder as `mosaic`: `cd ~/printer_data/config && git clone https://github.com/Slimohan/MOSAIC mosaic`.
 2. Run `./install.sh`. It creates `mosaic_dock_positions.cfg` next to `printer.cfg` (never overwriting yours) and links
    the Z switch module (only needed with a separate Z switch; it looks in `~/klipper` and `~/kalico`, pass a path if
    yours differs).
