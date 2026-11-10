@@ -20,7 +20,9 @@ stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-to
   want the best Z, add a plain switch that every nozzle presses from above (`[mosaic_z_probe]`) and MOSAIC
   takes Z from it.
 - **Tools (optional):** `T0` ... `T9` commands and a Tools page for changers with several tools,
-  including hotend swappers where every tool has its own heater and fan.
+  including hotend swappers where every tool has its own heater and fan. Each tool shows the filament that is
+  loaded (material, name, colour), has temperature buttons, and every tool change is timed and checked. While a
+  print runs, the page compares the loaded filament with what the sliced file expects.
 - **Docking (optional):** pick-up and drop-off for passive (Maxwell / kinematic) couplings, with a position and
   path per dock, a teach command, and checks of a carriage switch and one switch per dock around every change.
   Leave it out if your changer brings its own dock macros. Details in [docs/docking.md](docs/docking.md).
@@ -28,11 +30,12 @@ stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-to
 ## Screenshots
 
 <p align="center">
-  <img alt="MOSAIC Tools page with ten tool cards and the calibration buttons" src="assets/screenshots/tools.png" width="760">
+  <img alt="MOSAIC page with eight tool cards, the filament check and the tool change log" src="assets/screenshots/tools.png" width="760">
 </p>
 
-One card per tool with temperature, standby, fan, offsets, mount, dock and calibrate, and the calibration
-buttons below.
+One card per tool with the loaded filament, temperature, temperature buttons, fan, offsets, mount, dock and
+calibrate. On top, the filament check of the last file; below, the calibration buttons, the offsets and the tool
+change log.
 
 <p align="center">
   <img alt="MOSAIC page on a phone" src="assets/screenshots/tools-phone.png" width="300">
@@ -58,6 +61,7 @@ made-up demo data, not a real machine.
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
 | `examples/` | Hardware sections, a `printer.cfg` example, the dock positions template and the Mainsail sidebar entry. |
 | `install.sh` | Creates your dock positions file, links the Z switch module, and sets up the web page with its Mainsail sidebar entry and update panel entry. |
+| `uninstall.sh` | Undoes what `install.sh` set up. |
 
 ## Requirements
 
@@ -254,9 +258,11 @@ tools, Klipper stops with `gcode command T0 already registered`.
 | `MOSAIC_SET_TEMP [T=] TARGET= [WAIT=1]` | Set the temperature of a tool (default: the mounted one). |
 | `MOSAIC_TOOL_STANDBY [T=]` | Set the tool to `standby_temp` and remember its temperature. |
 | `MOSAIC_TOOLS_OFF` | All tool heaters off. |
-| `MOSAIC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target. |
+| `MOSAIC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target, filament. |
+| `MOSAIC_SET_FILAMENT [T=] MATERIAL= NAME= COLOR= TEMP= [CLEAR=1]` | The filament loaded in a tool, see "Filament per tool". |
+| `MOSAIC_TOOL_LOG [RESET=1]` | The last tool changes with their time and result. |
 
-`_MOSAIC_TOOLS_SETTINGS` has two settings: `standby_mode` and `standby_temp`. With `standby_mode: 'off'`
+`_MOSAIC_TOOLS_SETTINGS` has the settings `standby_mode`, `standby_temp`, `wait_on_select` and `presets`. With `standby_mode: 'off'`
 (default) a tool change does not touch any heater, which is right when the slicer sends its own standby
 temperatures. With `'standby'` the tool that is put away goes to `standby_temp` (0 = off), and it returns
 to its earlier temperature when it is mounted again (`wait_on_select` waits for it). Only a tool that is still at
@@ -274,6 +280,52 @@ a mounted tool and without `T` the original command runs. `M109` waits for the t
 mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define the macros `M104` and `M109`,
 Klipper does not complain but merges them, and the file included last silently wins. This file calls the
 Beacon offset update itself when the Beacon macros are loaded, so leave the Beacon hooks file out.
+
+### Filament per tool
+
+Each tool remembers the filament that is loaded: material, a name, a colour and its print temperature. Set it on the
+page (the **Filament** button on a card) or in the console:
+
+```
+MOSAIC_SET_FILAMENT T=2 MATERIAL=PETG NAME="Galaxy Blue" COLOR=1E5AFF TEMP=240
+```
+
+`COLOR` is six hex digits without the `#` (Klipper reads `#` as the start of a comment). Values you leave out stay as
+they were, so `MOSAIC_SET_FILAMENT T=2 TEMP=245` only changes the temperature; `CLEAR=1` forgets the filament. It is
+saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is not needed and not used.
+
+The card shows a hotend drawn in the filament colour with the material and name. The print temperature becomes a
+temperature button on the card.
+
+### Temperature buttons
+
+`presets` in `_MOSAIC_TOOLS_SETTINGS` is the list of temperature buttons on every card, as `name:temperature` separated
+by commas. A tool can have its own list:
+
+```
+[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+variable_presets: 'PLA:215, PETG:240, ABS:255'
+variable_presets_t3: 'TPU:225'        # T3 only
+```
+
+`''` shows no buttons. The print temperature of the loaded filament is added as an extra, highlighted button.
+
+### Filament check
+
+While a print runs (and afterwards, until the next file), the page reads the filament colours and types that the
+slicer wrote into the file (Moonraker's file metadata, filled by OrcaSlicer, PrusaSlicer, SuperSlicer and others)
+and compares them with the filament saved for each tool the file uses. A material that differs, or a colour that is
+clearly different, is marked in red. The check only warns; it does not stop the print, and it needs the filament set
+for the tools.
+
+### Tool change log
+
+The `T0` ... `T9` commands time every tool change, including the wait for the temperature in standby mode, and
+check it: afterwards the tool must be the mounted one and, if you have a carriage switch (`mosaic_head`), the switch
+must see a tool. A change that stopped with an error is counted as failed at the next change. `MOSAIC_TOOL_LOG`
+prints the last 20 changes, the page shows the last 10 with the number of changes, failures and the average time. The
+log lives in memory and starts empty after a Klipper restart. Changes made with `SELECT_TOOL` directly (the
+calibration does that) are not logged.
 
 ## Docking
 
@@ -379,10 +431,16 @@ it up; click **MOSAIC** in Mainsail's sidebar to open it.
 
 One card per tool, up to ten: mounted or docked, current and target temperature with a
 state (off, heating, ready, cooling), a field and buttons to set the temperature, put the tool on standby or
-switch it off, a fan slider, the saved offsets, and Mount, Dock and Calibrate. The bar on top has All heaters off
-and the tool list. The Calibration section has Calibrate all tools, X and Y only, Z only, an optional temperature,
+switch it off, the temperature buttons, a fan slider, the saved offsets, and Mount, Dock and Calibrate. Each card
+also shows the loaded filament and has a **Filament** button to change it. The bar on top has All heaters off
+and the tool list. Below the calibration and offsets come the tool change log and, during a print, the filament
+check. The Calibration section has Calibrate all tools, X and Y only, Z only, an optional temperature,
 the Nudge state, the set-up check and the saved offsets. Without `mosaic_tools.cfg` the buttons
 fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`.
+
+**Locked while printing.** While a print runs or is paused, Mount, Dock, Calibrate and Reload saved offsets are
+switched off on the page, so a tap cannot move the toolhead in the middle of a print. Temperatures, fans and the
+filament still work. The console commands are not locked (`MOSAIC_AUTO_Z_OFFSET` is meant to run in `PRINT_START`).
 
 The page can move the printer and heat tools, and the server has no login, just like Mainsail itself. Use it only
 on a trusted network.
@@ -407,6 +465,13 @@ instance with KIAUH) can replace its nginx site; run `./install.sh` again afterw
 
 The sidebar entry is a Mainsail feature. Fluidd users can open `http://<printer>/mosaic/` directly.
 
+### Uninstalling
+
+`./uninstall.sh` removes the service, the `/mosaic/` line in the nginx site, the sidebar entry, the update panel
+entry and the Z switch module links, and keeps a backup of every file it edits. It leaves `printer.cfg` alone: remove
+the MOSAIC includes, `_MOSAIC_SETTINGS` and the `[toolchanger]` hooks yourself, then restart Klipper. Your dock
+positions and the offsets and filaments in `[save_variables]` are kept.
+
 **By hand, without the installer:** copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the
 path inside, run `sudo systemctl enable --now mosaic-ui`, and open `http://<printer-address>:8099`.
 
@@ -422,7 +487,10 @@ Moonraker. The multi tool part (`T0` ... `T9`, standby, `M104` / `M109` with `T`
 The dock macros were tested the same way when they were a separate package (planned moves, errors, simulated
 switches); the combined package with the new `MOSAIC_CHECK` link and the new location of the positions file has not
 been run in batch mode yet. The page's `/mosaic/` route was tested through a real nginx in front of the page server;
-the installer itself has not been run on a real Pi.
+the installer itself has not been run on a real Pi. The filament, temperature button, tool change log and lock
+features were tested in a Klipper-style macro simulator (same template rules and parameter parsing, not Klipper
+itself) and in a headless browser against a fake Moonraker with an 8 tool printer, idle and printing. `uninstall.sh`
+has not been run on a real Pi.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the

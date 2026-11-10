@@ -48,6 +48,21 @@
   .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .note { color:var(--mute); font-size:13px; }
   ol { margin:0; padding-left:20px; color:var(--mute); font-size:13px; }
+  .fil { display:flex; gap:10px; align-items:center; }
+  .fil svg { width:34px; height:46px; flex:none; }
+  .fil .ftxt { min-width:0; flex:1; }
+  .fil .fmat { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fil .fname { font-size:12px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid var(--line); vertical-align:-1px; margin-right:5px; }
+  .presets { display:flex; flex-wrap:wrap; gap:4px; }
+  .card .presets button { padding:3px 7px; font-size:12px; }
+  .lock { border:1px solid #ff9f43; color:#ff9f43; border-radius:8px; padding:6px 10px; font-size:13px; }
+  .bad { color:var(--bad); } .good { color:var(--ok); }
+  dialog { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:10px; padding:16px; max-width:340px; width:92vw; }
+  dialog::backdrop { background:rgba(0,0,0,.5); }
+  dialog .grid { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; margin:10px 0; }
+  dialog input[type=text] { width:100%; }
+  dialog input[type=color] { width:60px; height:32px; padding:0 2px; }
 </style>
 </head>
 <body>
@@ -64,6 +79,12 @@
       <span class="pill" id="g_bed">bed -</span>
     </div>
     <div class="note" id="g_note"></div>
+    <div class="lock hidden" id="g_lock" style="margin-top:8px">Printing: mounting, docking, calibration and reloading offsets are locked. Temperatures, fans and filament still work.</div>
+  </section>
+  <section class="hidden" id="fcheck">
+    <h2>Filament check</h2>
+    <div class="note" id="fc_file"></div>
+    <table id="fc_table"></table>
   </section>
   <div class="cards" id="cards"></div>
   <section>
@@ -86,7 +107,31 @@
     <table id="offsets"><tr><td>-</td></tr></table>
     <div class="bar" style="margin-top:8px"><button id="b_echo">Print offsets to console</button> <button class="warn" id="b_apply">Reload saved offsets</button></div>
   </section>
+  <section class="hidden" id="logbox">
+    <h2>Tool changes</h2>
+    <div class="note" id="log_sum"></div>
+    <table id="log_table"></table>
+    <div class="bar" style="margin-top:8px"><button id="b_logreset">Clear the log</button></div>
+  </section>
 </div>
+
+<dialog id="fdlg">
+  <form method="dialog">
+    <b id="fd_title">Filament</b>
+    <div class="grid">
+      <label for="fd_mat">Material</label><input type="text" id="fd_mat" list="fd_mats" maxlength="20" placeholder="PLA">
+      <label for="fd_name">Name</label><input type="text" id="fd_name" maxlength="40" placeholder="Galaxy Blue">
+      <label for="fd_col">Colour</label><input type="color" id="fd_col" value="#808080">
+      <label for="fd_temp">Print temp</label><input type="number" id="fd_temp" min="0" max="500" step="5" placeholder="&deg;C">
+    </div>
+    <datalist id="fd_mats"><option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU</option><option>PC</option><option>PA</option><option>PLA-CF</option><option>PETG-CF</option></datalist>
+    <div class="bar">
+      <button class="primary" id="fd_save" value="save">Save</button>
+      <button id="fd_clear" value="clear" class="warn">Clear</button>
+      <button value="cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 "use strict";
@@ -134,6 +179,10 @@ let hasMosaicTools = false;  // mosaic_tools.cfg is loaded
 let refTool = 0;
 let cardKey = "";
 const cards = {};          // tool number -> element references
+let printing = false;      // a print is running or paused: tool changes are locked
+let toolSettings = {};     // _MOSAIC_TOOLS_SETTINGS (presets)
+let filaments = {};        // tool number -> saved filament
+let checkFile = "", checkMeta = null;   // filament check of the current print file
 
 const q = objs => "/printer/objects/query?" + objs.map(encodeURIComponent).join("&");
 const fmt = v => (v === undefined || v === null || isNaN(v)) ? "-" : Number(v).toFixed(1);
@@ -147,6 +196,51 @@ function calibrateTool(n) {
   gcode("MOSAIC_CALIBRATE TOOL=" + n + calTemp(), "Calibrate T" + n);
 }
 
+// A hotend drawing: filament strand and heater block in the filament colour.
+function hotendSvg(color) {
+  const c = color ? "#" + color : "none";
+  const stroke = color ? "rgba(0,0,0,.35)" : "var(--mute)";
+  return '<svg viewBox="0 0 34 46" aria-hidden="true">' +
+    '<rect x="15" y="0" width="4" height="9" rx="2" fill="' + c + '" stroke="' + stroke + '" stroke-dasharray="' + (color ? "0" : "2 2") + '"/>' +
+    [9, 13, 17, 21].map(y => '<rect x="6" y="' + y + '" width="22" height="2.4" rx="1" fill="#8a9096"/>').join("") +
+    '<rect x="15" y="9" width="4" height="16" fill="#8a9096"/>' +
+    '<rect x="7" y="25" width="20" height="10" rx="2" fill="' + (color ? c : "var(--card)") + '" stroke="' + stroke + '" stroke-dasharray="' + (color ? "0" : "2 2") + '"/>' +
+    '<path d="M13 35h8l-2.5 6h-3z" fill="#c9a24a"/></svg>';
+}
+
+function parsePresets(text) {
+  return String(text || "").split(",").map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.lastIndexOf(":"); const name = x.slice(0, i).trim(); const t = parseFloat(x.slice(i + 1));
+    return i > 0 && t >= 0 ? [name, t] : null;
+  }).filter(Boolean);
+}
+function presetsFor(n) {
+  const own = toolSettings["presets_t" + n];
+  return parsePresets(own !== undefined ? own : toolSettings.presets);
+}
+
+const clean = s => String(s || "").replace(/["'\\#;]/g, "").trim();
+let fdTool = -1;
+function editFilament(n) {
+  fdTool = n; const f = filaments[n] || {};
+  $("fd_title").textContent = "T" + n + " filament";
+  $("fd_mat").value = f.material || ""; $("fd_name").value = f.name || "";
+  $("fd_col").value = f.color ? "#" + f.color.toLowerCase() : "#808080";
+  $("fd_temp").value = f.temp > 0 ? f.temp : "";
+  $("fdlg").returnValue = "";
+  $("fdlg").showModal();
+}
+$("fdlg").addEventListener("close", () => {
+  const v = $("fdlg").returnValue, n = fdTool;
+  if (n < 0) return;
+  if (v === "clear") gcode("MOSAIC_SET_FILAMENT T=" + n + " CLEAR=1", "T" + n + " filament cleared");
+  if (v !== "save") return;
+  const t = parseFloat($("fd_temp").value) || 0;
+  const name = clean($("fd_name").value), mat = clean($("fd_mat").value).replace(/\s+/g, "-");
+  gcode("MOSAIC_SET_FILAMENT T=" + n + " MATERIAL=" + (mat || '""') + ' NAME="' + name + '" COLOR=' +
+        $("fd_col").value.replace("#", "").toUpperCase() + " TEMP=" + t, "T" + n + " filament");
+});
+
 function btn(text, fn, cls) { const b = document.createElement("button"); b.textContent = text; if (cls) b.className = cls; b.onclick = fn; return b; }
 
 function buildCards(nums) {
@@ -157,6 +251,14 @@ function buildCards(nums) {
     const title = document.createElement("span"); title.textContent = "T" + n;
     const where = document.createElement("span"); where.className = "pill dock"; where.textContent = "docked";
     h.append(title, where);
+    const fil = document.createElement("div"); fil.className = "fil";
+    const art = document.createElement("span"); art.innerHTML = hotendSvg("");
+    const ftxt = document.createElement("div"); ftxt.className = "ftxt";
+    const fmat = document.createElement("div"); fmat.className = "fmat";
+    const fname = document.createElement("div"); fname.className = "fname";
+    ftxt.append(fmat, fname);
+    const fedit = btn("Filament", () => editFilament(n));
+    fil.append(art, ftxt, fedit);
     const temp = document.createElement("div"); temp.className = "temp";
     const cur = document.createElement("span"); const tgt = document.createElement("small");
     const state = document.createElement("span"); state.className = "pill"; state.style.marginLeft = "8px";
@@ -171,6 +273,7 @@ function buildCards(nums) {
     inp.addEventListener("keydown", e => { if (e.key === "Enter") setTemp(); });
     row1.append(inp, btn("Set", setTemp, "primary"), btn("Standby", () => gcode(cmdStandby(n), "T" + n + " standby")),
                 btn("Off", () => gcode(cmdTemp(n, 0), "T" + n + " off")));
+    const pre = document.createElement("div"); pre.className = "presets";
     const fanRow = document.createElement("div");
     const fanLabel = document.createElement("div"); fanLabel.className = "mini";
     const fan = document.createElement("input"); fan.type = "range"; fan.min = 0; fan.max = 100; fan.step = 5; fan.value = 0;
@@ -183,9 +286,9 @@ function buildCards(nums) {
     const dock = btn("Dock", () => gcode("UNSELECT_TOOL", "Dock T" + n));
     const cal = btn("Calibrate", () => calibrateTool(n));
     row2.append(mount, dock, cal);
-    el.append(h, temp, row1, fanRow, off, row2);
+    el.append(h, fil, temp, row1, pre, fanRow, off, row2);
     box.appendChild(el);
-    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock };
+    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock, cal, art, fmat, fname, fedit, pre, artKey: null, preKey: null };
   });
 }
 
@@ -203,7 +306,29 @@ function updateCards(o, nums, v) {
     c.el.classList.toggle("mounted", mounted);
     c.where.textContent = mounted ? "mounted" : "docked";
     c.where.className = "pill " + (mounted ? "on" : "dock");
-    c.mount.disabled = mounted; c.dock.disabled = !mounted;
+    c.mount.disabled = mounted || printing; c.dock.disabled = !mounted || printing; c.cal.disabled = printing;
+    const f = filaments[n] || {};
+    const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "");
+    if (c.artKey !== key) {
+      c.artKey = key;
+      c.art.innerHTML = hotendSvg(f.color);
+      c.fmat.textContent = f.material || (f.name ? "" : "No filament set");
+      c.fmat.classList.toggle("note", !f.material && !f.name);
+      c.fname.textContent = f.name || "";
+      c.art.title = f.color ? "colour " + f.color : "";
+    }
+    c.fedit.classList.toggle("hidden", !hasMosaicTools);
+    const ps = hasMosaicTools ? presetsFor(n) : [];
+    if (f.temp > 0) {
+      const same = ps.findIndex(x => Math.round(x[1]) === Math.round(f.temp) && x[0].toUpperCase() === String(f.material || "").toUpperCase());
+      if (same >= 0) ps[same] = [ps[same][0], ps[same][1], true]; else ps.push([f.material || "Filament", Number(f.temp), true]);
+    }
+    const pk = JSON.stringify(ps);
+    if (c.preKey !== pk) {
+      c.preKey = pk; c.pre.textContent = "";
+      ps.forEach(([name, t, own]) => c.pre.appendChild(btn(name + " " + Math.round(t) + "\u00b0", () => gcode(cmdTemp(n, t), "T" + n + " to " + t + " \u00b0C"), own ? "primary" : "")));
+      c.pre.querySelectorAll("button.primary").forEach(b => { b.title = "Print temperature of the loaded filament"; });
+    }
     const h = ts.heater && o[ts.heater];
     if (h) {
       c.cur.textContent = fmt(h.temperature);
@@ -214,11 +339,11 @@ function updateCards(o, nums, v) {
     } else {
       c.cur.textContent = "no heater"; c.tgt.textContent = ""; c.state.textContent = ""; c.state.className = "pill";
     }
-    const f = ts.fan && (o[ts.fan] || o["fan_generic " + ts.fan]);
+    const fo = ts.fan && (o[ts.fan] || o["fan_generic " + ts.fan]);
     c.fanRow.classList.toggle("hidden", !ts.fan);
-    if (f && document.activeElement !== c.fan) {
-      c.fan.value = Math.round((f.speed || 0) * 100); c.fanLabel.textContent = "Fan " + c.fan.value + " %";
-    } else if (!f && ts.fan) { c.fanLabel.textContent = "Fan"; }
+    if (fo && document.activeElement !== c.fan) {
+      c.fan.value = Math.round((fo.speed || 0) * 100); c.fanLabel.textContent = "Fan " + c.fan.value + " %";
+    } else if (!fo && ts.fan) { c.fanLabel.textContent = "Fan"; }
     const xyz = ["x", "y", "z"].map(a => { const val = v["t" + n + "_offset_" + a]; return a.toUpperCase() + " " + (val === undefined ? "-" : Number(val).toFixed(3)); });
     c.off.textContent = "Offset " + xyz.join("  ");
   });
@@ -227,7 +352,8 @@ function updateCards(o, nums, v) {
 async function refresh() {
   try {
     const base = ["toolchanger", "save_variables", "gcode_macro _MOSAIC_STATE", "gcode_macro _MOSAIC_SETTINGS",
-                  "gcode_macro _MOSAIC_TOOLS_SETTINGS", "mosaic_z_probe", "heater_bed", "toolhead"].concat(toolNames);
+                  "gcode_macro _MOSAIC_TOOLS_SETTINGS", "gcode_macro _MOSAIC_LOG", "print_stats",
+                  "mosaic_z_probe", "heater_bed", "toolhead"].concat(toolNames);
     const j = await api(q(base));
     const o = j.result.status;
     const tc = o.toolchanger || {};
@@ -242,11 +368,17 @@ async function refresh() {
     const st = o["gcode_macro _MOSAIC_SETTINGS"];
     refTool = st && st.reference_tool !== undefined ? Number(st.reference_tool) : 0;
     hasMosaicTools = !!o["gcode_macro _MOSAIC_TOOLS_SETTINGS"];
+    toolSettings = o["gcode_macro _MOSAIC_TOOLS_SETTINGS"] || {};
+    const ps = o.print_stats || {};
+    printing = ps.state === "printing" || ps.state === "paused";
+    $("g_lock").classList.toggle("hidden", !printing);
+    ["c_all", "c_xy", "c_z", "b_apply"].forEach(id => { $(id).disabled = printing; });
     $("g_note").textContent = hasMosaicTools ? "" :
       "mosaic_tools.cfg is not loaded: the buttons use SELECT_TOOL and SET_TOOL_TEMPERATURE, there are no T0 ... T9 macros and no standby handling.";
 
     $("b_zq").classList.toggle("hidden", !o.mosaic_z_probe);
     const v = (o.save_variables && o.save_variables.variables) || {};
+    filaments = {}; nums.forEach(n => { const f = v["t" + n + "_filament"]; if (f && typeof f === "object") filaments[n] = f; });
     const ck = nums.join(",");
     if (ck !== cardKey) { cardKey = ck; buildCards(nums); }
     updateCards(o, nums, v);
@@ -261,8 +393,78 @@ async function refresh() {
       ["x", "y", "z"].forEach(a => { const val = v["t" + n + "_offset_" + a]; r.appendChild(td(val === undefined ? "-" : Number(val).toFixed(3))); });
       t.appendChild(r);
     });
+    showLog(o["gcode_macro _MOSAIC_LOG"]);
+    filamentCheck(ps.filename || "", ps.state, nums);
     if (!busy && $("status").textContent === "Connecting...") say("Ready.", "ok");
   } catch (e) { if (!busy) say("Cannot reach Klipper: " + e.message, "err"); }
+}
+
+// ---------------------------------------------------------------- tool change log
+function showLog(lg) {
+  $("logbox").classList.toggle("hidden", !lg);
+  if (!lg) return;
+  const good = lg.changes - lg.failures;
+  $("log_sum").textContent = lg.changes ? lg.changes + " tool changes since Klipper started, " + lg.failures + " failed" +
+    (good > 0 ? ", " + (lg.total_s / good).toFixed(1) + " s on average" : "") + "." : "No tool changes with T0 ... T9 since Klipper started.";
+  const t = $("log_table"); t.textContent = "";
+  const entries = (lg.entries || []).slice(-10).reverse();
+  if (lg.pending && lg.pending.to !== undefined) entries.unshift({ from: lg.pending.from, to: lg.pending.to, s: -1, run: true });
+  if (!entries.length) return;
+  const h = document.createElement("tr"); ["Change", "Time", "Result"].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
+  entries.forEach(e => {
+    const r = document.createElement("tr");
+    r.appendChild(td((e.from >= 0 ? "T" + e.from : "none") + " \u2192 T" + e.to));
+    r.appendChild(td(e.s >= 0 ? e.s.toFixed(1) + " s" : "-"));
+    const res = td(e.run ? "running, or stopped with an error" : (e.ok ? "ok" : "failed"));
+    res.className = e.run ? "note" : (e.ok ? "good" : "bad");
+    r.appendChild(res); t.appendChild(r);
+  });
+}
+$("b_logreset").onclick = () => gcode("MOSAIC_TOOL_LOG RESET=1", "Clear the log");
+
+// ---------------------------------------------------------------- filament check
+// Compares the filament the sliced file expects (Moonraker's metadata) with
+// the filament saved for each tool.
+const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "").trim()); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
+const colourDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const listOf = x => Array.isArray(x) ? x : String(x || "").split(";").map(s => s.trim());
+async function filamentCheck(file, state, nums) {
+  if (!file) { checkFile = ""; checkMeta = null; $("fcheck").classList.add("hidden"); return; }
+  if (file !== checkFile) {
+    checkFile = file; checkMeta = null;
+    try { checkMeta = (await api("/server/files/metadata?filename=" + encodeURIComponent(file))).result; } catch (e) { checkMeta = {}; }
+  }
+  const m = checkMeta || {};
+  const colours = listOf(m.filament_colors || m.extruder_colors), types = listOf(m.filament_type), names = listOf(m.filament_name);
+  const used = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools : colours.map((_, i) => i).filter(i => colours[i]);
+  const rows = used.filter(n => nums.includes(n)).map(n => {
+    const want = hexRgb(colours[n]), wtype = (types[n] || "").toUpperCase(), f = filaments[n] || {};
+    const have = hexRgb(f.color), htype = (f.material || "").toUpperCase();
+    let res = "match", cls = "good";
+    const diff = [];
+    if (wtype && htype && wtype !== htype) diff.push("material");
+    if (want && have && colourDist(want, have) > 80) diff.push("colour");
+    if (!f.material && !f.color) { res = "no filament set for this tool"; cls = "note"; }
+    else if (diff.length) { res = "different " + diff.join(" and "); cls = "bad"; }
+    return { n, want: colours[n], wtype, wname: names[n] || "", have: f.color ? "#" + f.color : "", htype, res, cls };
+  });
+  $("fcheck").classList.toggle("hidden", !rows.length);
+  if (!rows.length) return;
+  const bad = rows.filter(r => r.cls === "bad").length;
+  $("fc_file").textContent = (state === "printing" || state === "paused" ? "Printing " : "Last file: ") + file +
+    (bad ? " \u2014 " + (bad > 1 ? bad + " tools do not" : "1 tool does not") + " match what the file expects." : " \u2014 the loaded filament matches.");
+  $("fc_file").className = bad ? "bad" : "note";
+  const t = $("fc_table"); t.textContent = "";
+  const h = document.createElement("tr"); ["Tool", "File expects", "Loaded", ""].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
+  const cell = (col, text) => { const e = document.createElement("td"); if (hexRgb(col)) { const s = document.createElement("span"); s.className = "sw"; s.style.background = col; e.appendChild(s); } e.appendChild(document.createTextNode(text || "-")); return e; };
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.appendChild(td("T" + r.n));
+    tr.appendChild(cell(r.want, [r.wtype, r.wname && r.wname.toUpperCase() !== r.wtype ? r.wname : ""].filter(Boolean).join(" ")));
+    tr.appendChild(cell(r.have, [r.htype, (filaments[r.n] || {}).name].filter(Boolean).join(" ")));
+    const res = td(r.res); res.className = r.cls; tr.appendChild(res);
+    t.appendChild(tr);
+  });
 }
 
 $("g_off").onclick = () => {

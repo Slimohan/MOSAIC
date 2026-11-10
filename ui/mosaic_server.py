@@ -23,6 +23,7 @@ ALLOWED = (
     "/printer/gcode/script",
     "/printer/objects/query",
     "/printer/info",
+    "/server/files/metadata",
 )
 
 
