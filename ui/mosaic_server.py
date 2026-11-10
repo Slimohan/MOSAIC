@@ -7,7 +7,7 @@
 # page needs no CORS setup in Moonraker. Anyone who can open the page can move
 # the printer, so run it only on a trusted network.
 #
-# Part of klipper-mosaic, GPL-3.0.
+# Part of MOSAIC (github.com/Slimohan/MOSAIC), GPL-3.0.
 
 import argparse
 import http.server
