@@ -96,12 +96,15 @@ cd mosaic
 ./install.sh
 ```
 
-It does two things:
+It does three things:
 
 - **Creates your dock positions file** (`mosaic_dock_positions.cfg`) next to `printer.cfg`. If one already exists it
   leaves it alone and saves a fresh template beside it as `mosaic_dock_positions.cfg.new`.
 - **Links the optional Z switch module** into `~/klipper` or `~/kalico`. You only need this if you add the separate Z
   switch. If your Klipper or Kalico is somewhere else, pass the path: `./install.sh /path/to/klipper`.
+- **Sets up the MOSAIC page and adds it to Mainsail's sidebar.** After a reload of Mainsail there is a **MOSAIC**
+  entry on the left, and clicking it opens the page where you control and calibrate the tools. The installer
+  asks for your password (sudo) for this part. Details in "The web page" below; skip it with `NO_WEB=1 ./install.sh`.
 
 If the `mosaic` folder is not inside your config folder, tell the installer where `printer.cfg` is:
 `CONF=/path/to/config ./install.sh`.
@@ -135,16 +138,11 @@ If the `mosaic` folder is not inside your config folder, tell the installer wher
 
 It reports anything that is missing, including the docking (it runs `MOSAIC_DOCK_CHECK` at the end).
 
-### Optional: the web page
-
-The web page is set up by hand: copy `ui/mosaic-ui.service` into `/etc/systemd/system/`, edit the user and the path
-inside it, run `sudo systemctl enable --now mosaic-ui`, then open `http://<printer-address>:8099`. See
-"The web page" below.
-
 ### Updating
 
-There is no Moonraker update manager entry yet, so to get a new version run `git pull` in the `mosaic` folder and
-restart Klipper. Your dock positions file lives outside that folder, so an update never touches it.
+The installer adds MOSAIC to Mainsail's update panel (**Machine** page), so it updates like Klipper and Moonraker.
+Your dock positions file lives outside the `mosaic` folder, so an update never touches it. Without the update panel,
+run `git pull` in the `mosaic` folder and restart Klipper.
 
 ## Setup, once
 
@@ -348,11 +346,8 @@ G-code stops with an error. Then:
 
 ## The web page
 
-The page works on a phone or a computer, and needs only the Python that is already on the printer.
-
-1. Copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the path inside, then
-   `sudo systemctl enable --now mosaic-ui`.
-2. Open `http://<printer-address>:8099`.
+The page works on a phone or a computer, and needs only the Python that is already on the printer. `install.sh` sets
+it up; click **MOSAIC** in Mainsail's sidebar to open it.
 
 One card per tool, up to ten: mounted or docked, current and target temperature with a
 state (off, heating, ready, cooling), a field and buttons to set the temperature, put the tool on standby or
@@ -361,17 +356,31 @@ and the tool list. The Calibration section has Calibrate all tools, X and Y only
 the Nudge state, the set-up check and the saved offsets. Without `mosaic_tools.cfg` the buttons
 fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`.
 
-The page can move the printer and heat tools, and the server has no login. Use it only on a trusted network.
+The page can move the printer and heat tools, and the server has no login, just like Mainsail itself. Use it only
+on a trusted network.
 
-### A link in Mainsail
+### What the installer sets up
 
-Mainsail can show a menu entry that opens the page, but it cannot embed it: the entry is a link. Copy
-`examples/mainsail/navi.json` to the `.theme` folder in your config folder (`~/printer_data/config/.theme/navi.json`,
-create the folder if it does not exist), replace `YOUR-PRINTER-ADDRESS` with the address of the printer, and reload Mainsail.
-If you already have a `navi.json`, add the entry to its list. Mainsail's documentation describes the
-fields (`title`, `href`, `target`, `position`, `icon`); I could not check the exact folder on a running
-Mainsail, so if the entry does not appear, look up "custom navigation" in the Mainsail docs for your version.
-`target` `_self` opens the page in the same tab, `_blank` in a new one.
+- **The service** `mosaic-ui` runs the page server (`ui/mosaic_server.py`) as your user. It listens only on the
+  printer itself (port 8099); you reach it through Mainsail's web server.
+- **The address `http://<printer>/mosaic/`.** The installer adds one `include` line for `ui/nginx-mosaic.conf` to
+  Mainsail's nginx site (`/etc/nginx/sites-available/mainsail`), checks it with `nginx -t`, and puts the original
+  back if the check fails. A backup is kept as `mainsail.mosaic-backup`. Because the page shares Mainsail's address,
+  the sidebar entry works however you reach the printer (IP address, host name, VPN). If your site file has another
+  name, run `NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh`.
+- **The sidebar entry.** Mainsail reads extra sidebar entries from `.theme/navi.json` in the config folder. The
+  installer adds the MOSAIC entry from `examples/mainsail/navi.json` to that file, keeping any entries you already
+  have. It opens the page in the same tab; change `"target"` to `"_blank"` for a new tab.
+- **The update panel.** An `[update_manager mosaic]` section in `moonraker.conf`, and `mosaic-ui` in
+  `moonraker.asvc` so Moonraker may restart the page after an update.
+
+Running `./install.sh` again is safe: every step checks what is already there. Reinstalling Mainsail (for
+instance with KIAUH) can replace its nginx site; run `./install.sh` again afterwards to put `/mosaic/` back.
+
+The sidebar entry is a Mainsail feature. Fluidd users can open `http://<printer>/mosaic/` directly.
+
+**By hand, without the installer:** copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the
+path inside, run `sudo systemctl enable --now mosaic-ui`, and open `http://<printer-address>:8099`.
 
 ## Coming from the camera version
 
