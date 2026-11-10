@@ -4,9 +4,10 @@
 
 # MOSAIC: Multi-Tool Offset Alignment & Integrated Calibration
 
-Automatic tool offset calibration for tool changers on Klipper and Kalico. Every nozzle touches a small
-probe, the macros turn the touch points into the X, Y and Z offsets of each tool, and you do nothing in
-between.
+One package for the tools of a tool changer on Klipper and Kalico: calibration, tool control and docking.
+Every nozzle touches a small probe, the macros turn the touch points into the X, Y and Z offsets of each tool,
+and you do nothing in between. The same package gives you the `T0` ... `T9` commands, the dock pick-up and
+drop-off moves, and one web page to control it all.
 
 It works with any tool changer that runs on **klipper-toolchanger** (Viesturz), such as MadMax (Zruncho), on
 stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-toolchanger's tools and tool parameters.
@@ -20,6 +21,9 @@ stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-to
   takes Z from it.
 - **Tools (optional):** RatOS style `T0` ... `T9` commands and a Tools page for changers with several tools,
   including hotend swappers where every tool has its own heater and fan.
+- **Docking (optional):** pick-up and drop-off for passive (Maxwell / kinematic) couplings, with a position and
+  path per dock, a teach command, and checks of a carriage switch and one switch per dock around every change.
+  Leave it out if your changer brings its own dock macros. Details in [docs/docking.md](docs/docking.md).
 
 An earlier version of this package aligned the nozzles by eye with a camera. That is gone: the Nudge does it
 without anyone watching, so the camera, the LED ring and the alignment page were removed.
@@ -49,11 +53,14 @@ made-up demo data, not a real machine.
 | `mosaic.cfg` | The calibration macros. |
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
+| `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
+| `examples/mosaic_dock_positions.cfg` | Template for your dock positions. `install.sh` copies it next to `printer.cfg`. |
+| `docs/` | The docking guide and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | Optional web page: heaters, fans, mount, offsets and the calibration buttons. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
 | `examples/` | Hardware sections, a `printer.cfg` example and the Mainsail menu entry. |
-| `install.sh` | Links the module into Klipper and Kalico. |
+| `install.sh` | Creates your dock positions file and links the Z switch module into Klipper and Kalico. |
 
 ## Requirements
 
@@ -70,13 +77,20 @@ made-up demo data, not a real machine.
 ## Installation
 
 1. Put this folder in your config folder as `mosaic`: `cd ~/printer_data/config && git clone https://github.com/Slimohan/klipper-mosaic mosaic`.
-2. Install the switch module (only needed with a separate Z switch): `./install.sh` (it looks in `~/klipper` and `~/kalico`; pass a path if yours differs).
+2. Run `./install.sh`. It creates `mosaic_dock_positions.cfg` next to `printer.cfg` (never overwriting yours) and links
+   the Z switch module (only needed with a separate Z switch; it looks in `~/klipper` and `~/kalico`, pass a path if
+   yours differs).
 3. Add to `printer.cfg`:
    ```
    [include mosaic/mosaic.cfg]
    [include mosaic/examples/mosaic_hardware.cfg]
+   [include mosaic/mosaic_tools.cfg]          # optional, BEFORE the [tool Tn] sections
+   [include mosaic/mosaic_dock.cfg]           # optional, docking
+   [include mosaic_dock_positions.cfg]        # with docking: your dock positions
    ```
-   Then edit the hardware file: the Nudge pin and, if you have one, the Z switch.
+   Then edit the hardware file: the Nudge pin and, if you have one, the Z switch. With docking, also add the
+   `pickup_gcode` / `dropoff_gcode` hooks to `[toolchanger]` and the switch sections, see
+   `examples/printer.cfg.example` and [docs/docking.md](docs/docking.md).
 4. Add a `[gcode_macro _MOSAIC_SETTINGS]` section **after** the include with at least `nudge_x`, `nudge_y` and
    `nudge_z` (see "Setup, once"). List only the variables you want to change (see `examples/printer.cfg.example`). Every
    setting is explained in `mosaic.cfg`.
@@ -188,17 +202,21 @@ mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define
 Klipper does not complain but merges them, and the file included last silently wins (I tried it). This file calls the
 Beacon offset update itself when the Beacon macros are loaded, so leave the Beacon hooks file out.
 
-## Docking: what MOSAIC expects from your tool changer
+## Docking
 
-MOSAIC does not contain the macros that drop off and pick up a tool. Every tool change goes through
-klipper-toolchanger's `SELECT_TOOL` (and `UNSELECT_TOOL` for the Dock button), and klipper-toolchanger runs the docking
-motion from the `pickup_gcode` and `dropoff_gcode` of your `[tool Tn]` sections. Options you put in `[toolchanger]` are
-the defaults for all tools, and an option that is present but empty in a tool section overrides that default. Those
-macros come from your changer's own configuration, not from this package.
+Every tool change goes through klipper-toolchanger's `SELECT_TOOL` (and `UNSELECT_TOOL` for the Dock button), and
+klipper-toolchanger runs the docking motion from the `pickup_gcode` and `dropoff_gcode` hooks. Options you put in
+`[toolchanger]` are the defaults for all tools, and an option that is present but empty in a tool section overrides that
+default.
 
-`MOSAIC_CHECK` prints a `WARN` line for every tool that has no `pickup_gcode` or `dropoff_gcode`. It is a warning
-and not a failure, because only you know whether a tool really needs them, but a real changer does: without them a
-tool change only switches klipper-toolchanger's state and the toolhead does not move to the dock.
+MOSAIC brings its own dock macros for passive couplings (`mosaic_dock.cfg`): set the hooks in `[toolchanger]` to
+`MOSAIC_DOCK_PICKUP` / `MOSAIC_DOCK_DROPOFF`, teach the docks, done. Setup, paths, switches and commands are in
+[docs/docking.md](docs/docking.md). If your changer has its own dock macros (an actuated lock, for instance), leave
+`mosaic_dock.cfg` out and point the hooks at those.
+
+`MOSAIC_CHECK` prints a `WARN` line for every tool that has no `pickup_gcode` or `dropoff_gcode`, and runs
+`MOSAIC_DOCK_CHECK` at the end when the dock macros are included. Without the hooks a tool change only switches
+klipper-toolchanger's state and the toolhead does not move to the dock.
 
 What the MOSAIC macros assume, so your dock macros and settings have to fit:
 
@@ -224,7 +242,8 @@ A sensible first test order on the printer: `G28`, `SELECT_TOOL T=0`, `SELECT_TO
 | `MOSAIC_CALIBRATE_XY`, `MOSAIC_CALIBRATE_Z` | Shortcuts for `XY=1 Z=0` and `XY=0 Z=1`. |
 | `MOSAIC_AUTO_Z_OFFSET [TEMP=]` | Same as `MOSAIC_CALIBRATE_Z`, meant for `PRINT_START` after homing. |
 | `MOSAIC_NUDGE_QUERY` | Is the Nudge probe triggered? For testing the wiring. |
-| `MOSAIC_ECHO_OFFSETS`, `MOSAIC_RESET_OFFSETS [T=]`, `MOSAIC_APPLY_OFFSETS`, `MOSAIC_CHECK` | Utilities. `MOSAIC_CHECK` also checks the heater of every tool, that `T0` ... `T9` are the MOSAIC macros, and warns about tools without `pickup_gcode` or `dropoff_gcode`. |
+| `MOSAIC_ECHO_OFFSETS`, `MOSAIC_RESET_OFFSETS [T=]`, `MOSAIC_APPLY_OFFSETS`, `MOSAIC_CHECK` | Utilities. `MOSAIC_CHECK` also checks the heater of every tool, that `T0` ... `T9` are the MOSAIC macros, warns about tools without `pickup_gcode` or `dropoff_gcode`, and runs `MOSAIC_DOCK_CHECK` when docking is included. |
+| `MOSAIC_DOCK_PICKUP`, `MOSAIC_DOCK_DROPOFF`, `MOSAIC_DOCK_TEACH`, `MOSAIC_DOCK_GOTO`, ... | Docking, see the command list in [docs/docking.md](docs/docking.md#commands). |
 | `MOSAIC_Z_QUERY`, `MOSAIC_Z_PROBE`, `MOSAIC_Z_PROBE_ACCURACY` | The Z switch module (only with `[mosaic_z_probe]`). Use the last one to check its repeatability. |
 
 Wrong input (a missing tool, an unset position, axes not homed) only prints a warning and does nothing. That is
@@ -324,6 +343,9 @@ single tool and XY / Z only runs, hot runs and heater restore, the Z switch rout
 known heights), `z_source` selection, the `max_offset` refusal, missing settings and wrong input, both offset methods,
 `MOSAIC_CHECK`, and saving and loading the offsets. The web page was tested in a headless browser against a fake
 Moonraker. The multi tool part (`T0` ... `T9`, standby, `M104` / `M109` with `T`) was tested on a ten tool config.
+The dock macros were tested the same way when they were a separate package (planned moves, errors, simulated
+switches); the combined package with the new `MOSAIC_CHECK` link and the new location of the positions file has not
+been run in batch mode yet.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe has the sign convention that I read from the klipper-toolchanger code; whether the offsets come out with the
