@@ -19,7 +19,7 @@ stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-to
 - **Z with a separate switch (optional):** the Nudge is very repeatable in X and Y but less so in Z. If you
   want the best Z, add a plain switch that every nozzle presses from above (`[mosaic_z_probe]`) and MOSAIC
   takes Z from it.
-- **Tools (optional):** RatOS style `T0` ... `T9` commands and a Tools page for changers with several tools,
+- **Tools (optional):** `T0` ... `T9` commands and a Tools page for changers with several tools,
   including hotend swappers where every tool has its own heater and fan.
 - **Docking (optional):** pick-up and drop-off for passive (Maxwell / kinematic) couplings, with a position and
   path per dock, a teach command, and checks of a carriage switch and one switch per dock around every change.
@@ -187,12 +187,9 @@ to its earlier temperature when it is mounted again (`wait_on_select` waits for 
 `standby_temp` is restored, so a heater you switched off yourself stays off. For this to work change
 temperatures with `M104 T..`, `MOSAIC_SET_TEMP`, or the page; raw `SET_TOOL_TEMPERATURE` bypasses the memory.
 
-Like RatOS, every `T<n>` macro has an `active` variable that is `True` for the mounted tool. The state
+Every `T<n>` macro has an `active` variable that is `True` for the mounted tool. The state
 of klipper-toolchanger (`printer.toolchanger.tool_number`) is the real source; `active` is only for
 frontends that read it.
-
-The RatOS `T0`/`T1` macros are written for IDEX (parking positions, the second carriage), so only the
-idea carries over to a tool changer: a `T` command per tool, state variables, standby temperatures.
 
 ### M104 and M109 with T
 
