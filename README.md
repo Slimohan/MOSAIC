@@ -54,13 +54,13 @@ made-up demo data, not a real machine.
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
-| `examples/mosaic_dock_positions.cfg` | Template for your dock positions. `install.sh` copies it next to `printer.cfg`. |
+| `config/` | Templates for your MOSAIC folder: tools, hardware, dock positions, switches, settings. `install.sh` copies them once. |
 | `docs/` | The docking guide and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
-| `examples/` | Hardware sections, a `printer.cfg` example, the dock positions template and the Mainsail sidebar entry. |
-| `install.sh` | Creates your dock positions file, links the Z switch module, and sets up the web page with its Mainsail sidebar entry and update panel entry. |
+| `examples/mainsail/` | The Mainsail sidebar entry. |
+| `install.sh` | Creates your MOSAIC folder, adds its one include line to `printer.cfg`, links the Z switch module, and sets up the web page with its Mainsail sidebar entry and update panel entry. |
 | `uninstall.sh` | Undoes what `install.sh` set up. |
 
 ## Requirements
@@ -79,63 +79,70 @@ made-up demo data, not a real machine.
 
 ## Installation
 
-Installing is a git clone, the installer, then a few lines in `printer.cfg`.
+Everything MOSAIC lives in one folder, `MOSAIC`, in your Klipper config folder. `printer.cfg` gets a single line:
+
+```
+[include MOSAIC/*.cfg]
+```
 
 **Before you start:** klipper-toolchanger has to be installed first, using its own installer. MOSAIC is built on it.
 
 ### 1. Get the files
 
-On the printer's Pi or PC, over SSH:
+On the printer's Pi or PC, over SSH, in your home folder (not in the config folder):
 
 ```
-cd ~/printer_data/config
-git clone https://github.com/Slimohan/MOSAIC mosaic
+cd ~
+git clone https://github.com/Slimohan/MOSAIC
 ```
 
 ### 2. Run the installer
 
 ```
-cd mosaic
+cd MOSAIC
 ./install.sh
 ```
 
 It does three things:
 
-- **Creates your dock positions file** (`mosaic_dock_positions.cfg`) next to `printer.cfg`. If one already exists it
-  leaves it alone and saves a fresh template beside it as `mosaic_dock_positions.cfg.new`.
+- **Creates your MOSAIC folder** (`~/printer_data/config/MOSAIC`) with your config files, and adds
+  `[include MOSAIC/*.cfg]` at the top of `printer.cfg` (a backup is kept as `printer.cfg.mosaic-backup`). It never
+  overwrites a file of yours; if a template changed, the new one is saved beside yours with `.new` at the end.
 - **Links the optional Z switch module** into `~/klipper` or `~/kalico`. You only need this if you add the separate Z
   switch. If your Klipper or Kalico is somewhere else, pass the path: `./install.sh /path/to/klipper`.
 - **Sets up the MOSAIC page and adds it to Mainsail's sidebar.** After a reload of Mainsail there is a **MOSAIC**
   entry on the left, and clicking it opens the page where you control and calibrate the tools. The installer
   asks for your password (sudo) for this part. Details in "The web page" below; skip it with `NO_WEB=1 ./install.sh`.
 
-If the `mosaic` folder is not inside your config folder, tell the installer where `printer.cfg` is:
-`CONF=/path/to/config ./install.sh`.
+If your config folder is not `~/printer_data/config`: `CONF=/path/to/config ./install.sh`.
 
-### 3. Add MOSAIC to `printer.cfg`
+### 3. Fill in your MOSAIC folder
 
-- **The includes,** in this order. `mosaic_tools.cfg` must come **before** your `[tool Tn]` sections, or Klipper stops
-  with `gcode command T0 already registered`:
+In Mainsail, open **Machine** and then the `MOSAIC` folder:
 
-  ```
-  [include mosaic/mosaic.cfg]
-  [include mosaic/examples/mosaic_hardware.cfg]   # the Nudge probe and [save_variables]
-  [include mosaic/mosaic_tools.cfg]               # optional: T0 ... T9 and standby handling
-  [include mosaic/mosaic_tool_heaters.cfg]        # optional: M104 / M109 with T for slicers
-  [include mosaic/mosaic_dock.cfg]                # optional: docking
-  [include mosaic_dock_positions.cfg]             # with docking: your dock positions (created by install.sh)
-  ```
+```
+MOSAIC/
+  00_core.cfg             loads MOSAIC itself; switch optional parts on or off here
+  10_hardware.cfg         Nudge probe, optional Z switch, [save_variables]
+  20_dock_positions.cfg   where every dock is (docs/docking.md)
+  30_toolchanger.cfg      the [toolchanger] section with the dock hooks
+  40_tools.cfg            every tool: [tool Tn] and its heater, thermistor and fans
+  50_switches.cfg         carriage and dock switches (optional)
+  90_settings.cfg         your MOSAIC settings, at least the Nudge position
+  core/                   MOSAIC itself, a link to ~/MOSAIC: never edit anything in here
+```
 
-  Then edit the hardware file: the Nudge pin and, if you have one, the Z switch.
+Klipper loads the files in name order, so the number in front decides when a file loads: MOSAIC's T commands
+before the tools, your settings last. Move your `[tool Tn]` sections, the heaters and fans of the tools, and your
+`[toolchanger]` options from `printer.cfg` into `40_tools.cfg` and `30_toolchanger.cfg`. Each file explains what goes
+into it.
 
-- **The dock hooks** in `[toolchanger]` (`pickup_gcode` and `dropoff_gcode`), plus the switch sections if you have
-  switches. Copy them from `examples/printer.cfg.example`; [docs/docking.md](docs/docking.md) explains them.
+**Your own files** go into the same folder and are loaded automatically: give them a number for their place, for
+example `45_my_toolboard.cfg` loads after the tools. Every `.cfg` file in the folder is loaded, so don't leave copies
+there; files ending in `.bak` or `.new` are ignored.
 
-- **A `[gcode_macro _MOSAIC_SETTINGS]` section**, placed **after** the includes, with at least the Nudge probe position
-  (`nudge_x`, `nudge_y`, `nudge_z`, see "Setup, once"). List only the variables you want to change; every setting is
-  explained in `mosaic.cfg`.
-
-`examples/printer.cfg.example` shows all of this together.
+**Taking a tool out:** put a hash sign in front of its block in `40_tools.cfg` and of its dock switch in
+`50_switches.cfg`. Its saved offsets and filament stay saved.
 
 ### 4. Restart Klipper and run `MOSAIC_CHECK`
 
@@ -143,9 +150,10 @@ It reports anything that is missing, including the docking (it runs `MOSAIC_DOCK
 
 ### Updating
 
-The installer adds MOSAIC to Mainsail's update panel (**Machine** page), so it updates like Klipper and Moonraker.
-Your dock positions file lives outside the `mosaic` folder, so an update never touches it. Without the update panel,
-run `git pull` in the `mosaic` folder and restart Klipper.
+The installer adds MOSAIC to Mainsail's update panel (**Machine** page), so it updates like Klipper and Moonraker. An
+update only replaces `~/MOSAIC` (what `core/` points to); your files in the MOSAIC folder are never touched. Without
+the update panel, run `git pull` in `~/MOSAIC` and restart Klipper. After an update, run `./install.sh` once more if the
+release notes say a template changed: it saves the new template beside yours as `.new` for you to compare.
 
 ## Setup, once
 
@@ -243,14 +251,10 @@ For both layouts:
 
 ### The T commands
 
-```
-[include mosaic/mosaic.cfg]
-[include mosaic/mosaic_tools.cfg]      # BEFORE the [tool Tn] sections
-```
-
-The include order matters. klipper-toolchanger registers its own `T0` ... `T9` for every tool and does
-not replace a macro that already exists, so the macros must be loaded first. If you put them after the
-tools, Klipper stops with `gcode command T0 already registered`.
+`00_core.cfg` loads `mosaic_tools.cfg` before `40_tools.cfg`, as it must: klipper-toolchanger registers its own
+`T0` ... `T9` for every tool and does not replace a macro that already exists, so MOSAIC's macros have to be there
+first. If a `[tool Tn]` section is left in `printer.cfg` above the include line, Klipper stops with
+`gcode command T0 already registered`; move it into `40_tools.cfg`.
 
 | Command | Meaning |
 |---|---|
@@ -303,10 +307,13 @@ temperature button on the card.
 by commas. A tool can have its own list:
 
 ```
+# in MOSAIC/90_settings.cfg
 [gcode_macro _MOSAIC_TOOLS_SETTINGS]
 variable_presets: 'PLA:215, PETG:240, ABS:255'
-variable_presets_t3: 'TPU:225'        # T3 only
+variable_presets_t3: 'TPU:225'
 ```
+
+(`presets_t3` is for T3 only.)
 
 `''` shows no buttons. The print temperature of the loaded filament is added as an extra, highlighted button.
 
@@ -334,10 +341,10 @@ klipper-toolchanger runs the docking motion from the `pickup_gcode` and `dropoff
 `[toolchanger]` are the defaults for all tools, and an option that is present but empty in a tool section overrides that
 default.
 
-MOSAIC brings its own dock macros for passive couplings (`mosaic_dock.cfg`): set the hooks in `[toolchanger]` to
-`MOSAIC_DOCK_PICKUP` / `MOSAIC_DOCK_DROPOFF`, teach the docks, done. Setup, paths, switches and commands are in
-[docs/docking.md](docs/docking.md). If your changer has its own dock macros (an actuated lock, for instance), leave
-`mosaic_dock.cfg` out and point the hooks at those.
+MOSAIC brings its own dock macros for passive couplings (`mosaic_dock.cfg`). The hooks in `30_toolchanger.cfg` already
+point at `MOSAIC_DOCK_PICKUP` / `MOSAIC_DOCK_DROPOFF`; teach the docks in `20_dock_positions.cfg`, done. Setup, paths, switches and commands are in
+[docs/docking.md](docs/docking.md). If your changer has its own dock macros (an actuated lock, for instance), put a hash
+sign in front of `mosaic_dock.cfg` in `00_core.cfg`, empty `20_dock_positions.cfg`, and point the hooks at your macros.
 
 `MOSAIC_CHECK` prints a `WARN` line for every tool that has no `pickup_gcode` or `dropoff_gcode`, and runs
 `MOSAIC_DOCK_CHECK` at the end when the dock macros are included. Without the hooks a tool change only switches
@@ -467,10 +474,11 @@ The sidebar entry is a Mainsail feature. Fluidd users can open `http://<printer>
 
 ### Uninstalling
 
-`./uninstall.sh` removes the service, the `/mosaic/` line in the nginx site, the sidebar entry, the update panel
-entry and the Z switch module links, and keeps a backup of every file it edits. It leaves `printer.cfg` alone: remove
-the MOSAIC includes, `_MOSAIC_SETTINGS` and the `[toolchanger]` hooks yourself, then restart Klipper. Your dock
-positions and the offsets and filaments in `[save_variables]` are kept.
+`./uninstall.sh` removes the include line from `printer.cfg`, the `core` link, the service, the `/mosaic/` line in the
+nginx site, the sidebar entry, the update panel entry and the Z switch module links, and keeps a backup of every file
+it edits. Your MOSAIC folder stays, with your tools, settings and dock positions, and so do the offsets and filaments
+in `[save_variables]`. If you keep using the tool changer without MOSAIC, move your tools and `[toolchanger]` section
+back into `printer.cfg` (without the MOSAIC dock hooks) before restarting Klipper.
 
 **By hand, without the installer:** copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the
 path inside, run `sudo systemctl enable --now mosaic-ui`, and open `http://<printer-address>:8099`.

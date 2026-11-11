@@ -1,24 +1,37 @@
 #!/bin/sh
 # MOSAIC uninstaller: undoes what install.sh set up.
+#   - the [include MOSAIC/*.cfg] line in printer.cfg (a backup is kept)
+#   - the core link in your MOSAIC folder
 #   - the mosaic-ui service
 #   - the /mosaic/ include in Mainsail's nginx site (a backup is kept)
 #   - the MOSAIC entry in Mainsail's sidebar (.theme/navi.json)
 #   - [update_manager mosaic] in moonraker.conf and mosaic-ui in moonraker.asvc (backups are kept)
 #   - the Z switch module links in Klipper and Kalico
 #
-# It does NOT touch printer.cfg: remove the [include mosaic/...] lines, your
-# [gcode_macro _MOSAIC_SETTINGS] section and the [toolchanger] hooks yourself.
-# Your dock positions (mosaic_dock_positions.cfg) and the saved offsets and
-# filaments in [save_variables] are kept.
+# Your MOSAIC folder with your files (tools, settings, dock positions) and the
+# saved offsets and filaments in [save_variables] are kept. Your tools and the
+# [toolchanger] section live in that folder: move them back into printer.cfg
+# if you keep using the tool changer without MOSAIC.
 #
 # Usage: ./uninstall.sh [path to klipper or kalico, ...]   (default: ~/klipper ~/kalico)
-#   CONF=/path/to/config ./uninstall.sh   if this folder is not inside your config folder
+#   CONF=/path/to/config ./uninstall.sh   if your config folder is not ~/printer_data/config
 #   NGINX_SITE=/etc/nginx/sites-available/<name> ./uninstall.sh
 # Running it twice is safe.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-conf="${CONF:-$(dirname "$here")}"
+conf="${CONF:-$HOME/printer_data/config}"
 stamp=$(date +%Y%m%d-%H%M%S)
+
+# --- printer.cfg and the core link -----------------------------------------
+if [ -f "$conf/printer.cfg" ] && grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
+    cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-uninstall-$stamp"
+    sed -i "/^\[include MOSAIC\/\*\.cfg\]/d" "$conf/printer.cfg"
+    echo "printer.cfg: [include MOSAIC/*.cfg] removed (backup: printer.cfg.mosaic-uninstall-$stamp)"
+fi
+if [ -L "$conf/MOSAIC/core" ]; then
+    rm -f "$conf/MOSAIC/core"
+    echo "removed the core link in $conf/MOSAIC"
+fi
 
 # --- the service ------------------------------------------------------------
 unit=/etc/systemd/system/mosaic-ui.service
@@ -113,7 +126,8 @@ done
 
 echo
 echo "Left for you to do:"
-echo "  - remove the [include mosaic/...] lines, [gcode_macro _MOSAIC_SETTINGS] and the [toolchanger] hooks from printer.cfg"
+echo "  - if you keep the tool changer: move your [tool Tn], heater/fan and [toolchanger] sections"
+echo "    from $conf/MOSAIC/40_tools.cfg and 30_toolchanger.cfg back into printer.cfg (without the MOSAIC dock hooks)"
 echo "  - restart Klipper"
-echo "  - delete this folder ($here) if you no longer want it"
-echo "Kept: $conf/mosaic_dock_positions.cfg and the MOSAIC values in [save_variables]."
+echo "  - delete $conf/MOSAIC and $here when you no longer want them"
+echo "Kept: your files in $conf/MOSAIC and the MOSAIC values in [save_variables]."
