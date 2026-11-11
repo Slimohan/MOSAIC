@@ -1,49 +1,84 @@
 #!/bin/sh
-# MOSAIC installer.
-#   1. Creates your dock positions file next to printer.cfg (never overwrites it).
+# MOSAIC installer. Run it from the MOSAIC download (normally ~/MOSAIC):
+#   1. Creates your MOSAIC folder in the Klipper config folder
+#      (~/printer_data/config/MOSAIC) with your config files and a link
+#      core/ -> this download, and adds  [include MOSAIC/*.cfg]  to
+#      printer.cfg. Your files are never overwritten.
 #   2. Links the optional Z switch module into Klipper and Kalico.
 #   3. Sets up the MOSAIC page: a service, the page at http://<printer>/mosaic/
 #      through Mainsail's web server, a MOSAIC entry in Mainsail's sidebar,
 #      and MOSAIC in Mainsail's update panel. Needs sudo for the service and nginx.
 #
 # Usage: ./install.sh [path to klipper or kalico, ...]   (default: ~/klipper ~/kalico)
-#   CONF=/path/to/config ./install.sh   if this folder is not inside your config folder
+#   CONF=/path/to/config ./install.sh   if your config folder is not ~/printer_data/config
 #   COPY=1 ./install.sh                 to copy the module instead of symlinking it
 #   NO_WEB=1 ./install.sh               to skip step 3
 #   NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh   if Mainsail's site file has another name
 # Running it again is safe: every step checks what is already there.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
+conf="${CONF:-$HOME/printer_data/config}"
 
-# --- 1. dock positions -------------------------------------------------------
-# The positions file is yours, so it lives in the config folder, outside this
-# git folder: a "git pull" of MOSAIC can never overwrite or conflict with it.
-conf="${CONF:-$(dirname "$here")}"
-if [ -f "$conf/printer.cfg" ]; then
-    if [ -e "$conf/mosaic_dock_positions.cfg" ]; then
-        cp "$here/examples/mosaic_dock_positions.cfg" "$conf/mosaic_dock_positions.cfg.new"
-        echo "kept your mosaic_dock_positions.cfg, fresh template saved as mosaic_dock_positions.cfg.new"
-    else
-        cp "$here/examples/mosaic_dock_positions.cfg" "$conf/mosaic_dock_positions.cfg"
-        echo "created $conf/mosaic_dock_positions.cfg"
+# --- 1. your MOSAIC folder -----------------------------------------------------
+if [ ! -f "$conf/printer.cfg" ]; then
+    echo "no printer.cfg in $conf - set CONF=/path/to/config and run again"
+    exit 1
+fi
+case "$here/" in
+    "$conf"/*) echo "This MOSAIC download is inside the config folder ($here)."
+               echo "Clone it into your home folder instead:  cd ~ && git clone https://github.com/Slimohan/MOSAIC"
+               exit 1 ;;
+esac
+dest="$conf/MOSAIC"
+mkdir -p "$dest"
+if [ -e "$dest/core" ] && [ ! -L "$dest/core" ]; then
+    echo "$dest/core exists and is not a link - move it away and run again"
+    exit 1
+fi
+ln -sfn "$here" "$dest/core"
+echo "MOSAIC folder: $dest (core -> $here)"
+# your dock positions from an older install, next to printer.cfg
+if [ -f "$conf/mosaic_dock_positions.cfg" ] && [ ! -e "$dest/20_dock_positions.cfg" ]; then
+    mv "$conf/mosaic_dock_positions.cfg" "$dest/20_dock_positions.cfg"
+    echo "moved your mosaic_dock_positions.cfg to $dest/20_dock_positions.cfg"
+fi
+for f in "$here"/config/*.cfg; do
+    name=$(basename "$f")
+    if [ ! -e "$dest/$name" ]; then
+        cp "$f" "$dest/$name"
+        echo "  created $name"
+    elif ! cmp -s "$f" "$dest/$name"; then
+        cp "$f" "$dest/$name.new"
+        echo "  kept your $name (the current template is saved as $name.new)"
     fi
+done
+# the one line in printer.cfg
+if grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
+    echo "printer.cfg already includes MOSAIC/*.cfg"
 else
-    echo "no printer.cfg in $conf, dock positions file not created (set CONF=/path/to/config)"
+    cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-backup"
+    { echo "[include MOSAIC/*.cfg]"; cat "$conf/printer.cfg.mosaic-backup"; } > "$conf/printer.cfg"
+    echo "added [include MOSAIC/*.cfg] at the top of printer.cfg (backup: printer.cfg.mosaic-backup)"
+fi
+if grep -qE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg"; then
+    echo "NOTE: printer.cfg still has includes from an older MOSAIC install:"
+    grep -nE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg" | sed 's/^/    /'
+    echo "      remove them, the MOSAIC folder loads everything now"
 fi
 
 # --- 2. Z switch module ------------------------------------------------------
 [ $# -eq 0 ] && set -- "$HOME/klipper" "$HOME/kalico"
 found=0
 for tree in "$@"; do
-    dest="$tree/klippy/extras"
-    [ -d "$dest" ] || continue
+    xdest="$tree/klippy/extras"
+    [ -d "$xdest" ] || continue
     found=1
     for f in "$here"/klippy_extras/*.py; do
         name=$(basename "$f")
-        rm -f "$dest/$name"
-        if [ -n "$COPY" ]; then cp "$f" "$dest/$name"; else ln -s "$f" "$dest/$name"; fi
+        rm -f "$xdest/$name"
+        if [ -n "$COPY" ]; then cp "$f" "$xdest/$name"; else ln -s "$f" "$xdest/$name"; fi
     done
-    echo "installed the Z switch module into $dest"
+    echo "installed the Z switch module into $xdest"
 done
 [ $found -eq 1 ] || echo "no klippy/extras folder found, Z switch module not installed (only needed with [mosaic_z_probe]; pass the path to Klipper or Kalico)"
 
@@ -142,5 +177,9 @@ CONF
     fi
 fi
 
-echo "Next: add the includes and the [toolchanger] hooks to printer.cfg (see examples/printer.cfg.example), restart Klipper, run MOSAIC_CHECK."
+echo
+echo "Next: edit the files in $dest (in Mainsail: Machine > MOSAIC):"
+echo "  40_tools.cfg, 10_hardware.cfg, 90_settings.cfg, then 50_switches.cfg and 20_dock_positions.cfg."
+echo "Move your [tool Tn], tool heater/fan and [toolchanger] sections from printer.cfg into them."
+echo "Then restart Klipper and run MOSAIC_CHECK."
 [ -z "$NO_WEB" ] && echo "MOSAIC page: reload Mainsail and click MOSAIC in the sidebar."
