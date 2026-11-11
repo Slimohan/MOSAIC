@@ -301,6 +301,26 @@ saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is
 The card shows a hotend drawn in the filament colour with the material and name. The print temperature becomes a
 temperature button on the card.
 
+### Filament sync with OrcaSlicer
+
+MOSAIC copies the filament of every tool into Moonraker's database (namespace `lane_data`, one entry `T0` ... `T9`
+per tool, the format AFC and Happy Hare use). OrcaSlicer reads it for Moonraker printers: press **Synchronize
+filaments** in the filament list of the prepare tab, and Orca fills its filament slots with the colour and material
+of every tool, so you do not pick them by hand.
+
+- **Set up once in Orca:** connect the printer (the printer's address with Moonraker's port, for example
+  `192.168.1.50:7125`). A recent OrcaSlicer is needed; older versions have no filament sync for Moonraker printers.
+- **What Orca gets:** colour, material, the print temperature and the name you gave the filament. Orca chooses a
+  matching generic profile for the material (for example Generic PLA); if you use your own tuned profile, pick it once
+  after the sync.
+- **When it updates:** the MOSAIC page service checks every 5 seconds, so a change on the page or with
+  `MOSAIC_SET_FILAMENT` is there a moment later; then press sync in Orca again. Orca only reads, it never writes back.
+- **Tools without a filament** are left out. Only the entries `T0` ... `T9` are MOSAIC's; other `lane_data` entries
+  (from an MMU, for instance) are not touched. If you also edit filament slots in Mainsail, MOSAIC's values win for
+  `T0` ... `T9`.
+- **Needs the page service** (`mosaic-ui`, set up by `install.sh`). Switch the sync off with
+  `variable_slicer_sync: False` in `90_settings.cfg`; the entries already written then stay as they are.
+
 ### Temperature buttons
 
 `presets` in `_MOSAIC_TOOLS_SETTINGS` is the list of temperature buttons on every card, as `name:temperature` separated
