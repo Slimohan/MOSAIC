@@ -319,11 +319,17 @@ variable_presets_t3: 'TPU:225'
 
 ### Filament check
 
-While a print runs (and afterwards, until the next file), the page reads the filament colours and types that the
-slicer wrote into the file (Moonraker's file metadata, filled by OrcaSlicer, PrusaSlicer, SuperSlicer and others)
-and compares them with the filament saved for each tool the file uses. A material that differs, or a colour that is
-clearly different, is marked in red. The check only warns; it does not stop the print, and it needs the filament set
-for the tools.
+The page compares the filament colours and types that the slicer wrote into a file (Moonraker's file metadata, filled
+by OrcaSlicer, PrusaSlicer, SuperSlicer and others) with the filament saved for each tool the file uses. Choose any of
+the 30 newest files to check it **before** you print; without a choice the page checks the current (or last) print. A
+material that differs, or a colour that is clearly different, is marked in red, and when another tool holds the
+expected filament the page says so ("different colour — loaded in T7").
+
+The check only warns; it does not stop a print and it does not change which tool prints what. To use another tool,
+load the expected filament into the tool the file asks for, or assign that filament to the other tool in the slicer
+and slice again. Tool mapping belongs in the slicer: it also sets the temperatures, pressure advance, retraction and
+purge for the tool it assigns, which a remap on the printer would miss. The check needs the filament set for the
+tools (see "Filament per tool").
 
 ### Tool change log
 

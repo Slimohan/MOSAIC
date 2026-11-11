@@ -83,8 +83,10 @@
   </section>
   <section class="hidden" id="fcheck">
     <h2>Filament check</h2>
+    <div class="bar"><label for="mf_file">File</label> <select id="mf_file"><option value="">Current or last print</option></select></div>
     <div class="note" id="fc_file"></div>
     <table id="fc_table"></table>
+    <div class="note" id="fc_hint"></div>
   </section>
   <div class="cards" id="cards"></div>
   <section>
@@ -182,7 +184,8 @@ const cards = {};          // tool number -> element references
 let printing = false;      // a print is running or paused: tool changes are locked
 let toolSettings = {};     // _MOSAIC_TOOLS_SETTINGS (presets)
 let filaments = {};        // tool number -> saved filament
-let checkFile = "", checkMeta = null;   // filament check of the current print file
+let checkFile = "", checkMeta = null;   // filament check: the file and its metadata
+let fileList = [];                      // newest G-code files, to check one before printing
 
 const q = objs => "/printer/objects/query?" + objs.map(encodeURIComponent).join("&");
 const fmt = v => (v === undefined || v === null || isNaN(v)) ? "-" : Number(v).toFixed(1);
@@ -428,8 +431,34 @@ $("b_logreset").onclick = () => gcode("MOSAIC_TOOL_LOG RESET=1", "Clear the log"
 const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "").trim()); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
 const colourDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const listOf = x => Array.isArray(x) ? x : String(x || "").split(";").map(s => s.trim());
-async function filamentCheck(file, state, nums) {
-  if (!file) { checkFile = ""; checkMeta = null; $("fcheck").classList.add("hidden"); return; }
+function compare(want, wtype, f) {
+  const have = hexRgb(f.color), htype = (f.material || "").toUpperCase(), diff = [];
+  if (!f.material && !f.color) return ["no filament set", "note"];
+  if (wtype && htype && wtype !== htype) diff.push("material");
+  if (want && have && colourDist(want, have) > 80) diff.push("colour");
+  return diff.length ? ["different " + diff.join(" and "), "bad"] : ["match", "good"];
+}
+// The tool that holds the filament a slicer tool expects: same material, closest colour.
+function holder(want, wtype, nums) {
+  let best = -1, bd = Infinity;
+  nums.forEach(p => {
+    const f = filaments[p] || {}, have = hexRgb(f.color), htype = (f.material || "").toUpperCase();
+    if (!f.material && !f.color) return;
+    if (wtype && htype && wtype !== htype) return;
+    const d = want && have ? colourDist(want, have) : (want ? Infinity : 0);
+    if (d <= 80 && d < bd) { bd = d; best = p; }
+  });
+  return best;
+}
+async function filamentCheck(printFile, state, nums) {
+  const file = $("mf_file").value || printFile;
+  $("fcheck").classList.toggle("hidden", !file && !fileList.length);
+  if (!file) {
+    checkFile = ""; checkMeta = null;
+    $("fc_file").textContent = "Choose a file to compare the filament it expects with what is loaded.";
+    $("fc_file").className = "note"; $("fc_table").textContent = ""; $("fc_hint").textContent = "";
+    return;
+  }
   if (file !== checkFile) {
     checkFile = file; checkMeta = null;
     try { checkMeta = (await api("/server/files/metadata?filename=" + encodeURIComponent(file))).result; } catch (e) { checkMeta = {}; }
@@ -437,35 +466,50 @@ async function filamentCheck(file, state, nums) {
   const m = checkMeta || {};
   const colours = listOf(m.filament_colors || m.extruder_colors), types = listOf(m.filament_type), names = listOf(m.filament_name);
   const used = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools : colours.map((_, i) => i).filter(i => colours[i]);
-  const rows = used.filter(n => nums.includes(n)).map(n => {
+  const rows = used.map(n => {
     const want = hexRgb(colours[n]), wtype = (types[n] || "").toUpperCase(), f = filaments[n] || {};
-    const have = hexRgb(f.color), htype = (f.material || "").toUpperCase();
-    let res = "match", cls = "good";
-    const diff = [];
-    if (wtype && htype && wtype !== htype) diff.push("material");
-    if (want && have && colourDist(want, have) > 80) diff.push("colour");
-    if (!f.material && !f.color) { res = "no filament set for this tool"; cls = "note"; }
-    else if (diff.length) { res = "different " + diff.join(" and "); cls = "bad"; }
-    return { n, want: colours[n], wtype, wname: names[n] || "", have: f.color ? "#" + f.color : "", htype, res, cls };
+    let [res, cls] = nums.includes(n) ? compare(want, wtype, f) : ["tool not configured", "bad"];
+    const at = cls === "bad" || cls === "note" ? holder(want, wtype, nums) : -1;
+    if (at >= 0 && at !== n) res += " — loaded in T" + at;
+    return { n, at, want: colours[n], wtype, wname: names[n] || "", f, res, cls };
   });
-  $("fcheck").classList.toggle("hidden", !rows.length);
-  if (!rows.length) return;
+  const live = file === printFile && (state === "printing" || state === "paused");
   const bad = rows.filter(r => r.cls === "bad").length;
-  $("fc_file").textContent = (state === "printing" || state === "paused" ? "Printing " : "Last file: ") + file +
-    (bad ? " \u2014 " + (bad > 1 ? bad + " tools do not" : "1 tool does not") + " match what the file expects." : " \u2014 the loaded filament matches.");
+  if (!rows.length) {
+    $("fc_file").textContent = file + " — the file has no filament information (the slicer did not write any).";
+    $("fc_file").className = "note"; $("fc_table").textContent = ""; $("fc_hint").textContent = ""; return;
+  }
+  $("fc_file").textContent = (live ? "Printing " : "File: ") + file +
+    (bad ? " — " + (bad > 1 ? bad + " tools do not" : "1 tool does not") + " match what the file expects." : " — the loaded filament matches.");
   $("fc_file").className = bad ? "bad" : "note";
+  const moves = rows.filter(r => r.cls === "bad" && r.at >= 0 && r.at !== r.n).map(r => "T" + r.n + " → T" + r.at);
+  $("fc_hint").textContent = bad ? "Load the expected filament into the tool, or reassign the filament to another tool in the slicer and slice again" +
+    (moves.length ? " (" + moves.join(", ") + ")." : ".") : "";
   const t = $("fc_table"); t.textContent = "";
   const h = document.createElement("tr"); ["Tool", "File expects", "Loaded", ""].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
-  const cell = (col, text) => { const e = document.createElement("td"); if (hexRgb(col)) { const s = document.createElement("span"); s.className = "sw"; s.style.background = col; e.appendChild(s); } e.appendChild(document.createTextNode(text || "-")); return e; };
+  const cell = (col, text) => { const e = document.createElement("td"); if (hexRgb(col)) { const s = document.createElement("span"); s.className = "sw"; s.style.background = col.startsWith("#") ? col : "#" + col; e.appendChild(s); } e.appendChild(document.createTextNode(text || "-")); return e; };
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.appendChild(td("T" + r.n));
     tr.appendChild(cell(r.want, [r.wtype, r.wname && r.wname.toUpperCase() !== r.wtype ? r.wname : ""].filter(Boolean).join(" ")));
-    tr.appendChild(cell(r.have, [r.htype, (filaments[r.n] || {}).name].filter(Boolean).join(" ")));
+    tr.appendChild(cell(r.f.color ? "#" + r.f.color : "", [r.f.material, r.f.name].filter(Boolean).join(" ")));
     const res = td(r.res); res.className = r.cls; tr.appendChild(res);
     t.appendChild(tr);
   });
 }
+async function loadFiles() {
+  try {
+    const r = (await api("/server/files/list?root=gcodes")).result || [];
+    fileList = r.filter(f => /\.(gcode|g|gco)$/i.test(f.path)).sort((a, b) => b.modified - a.modified).slice(0, 30);
+    const sel = $("mf_file"), cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    fileList.forEach(f => { const o = document.createElement("option"); o.value = o.textContent = f.path; sel.appendChild(o); });
+    sel.value = fileList.some(f => f.path === cur) ? cur : "";
+  } catch (e) { /* no file list: only the current print is checked */ }
+}
+$("mf_file").onfocus = loadFiles;
+$("mf_file").onchange = () => refresh();
+loadFiles();
 
 $("g_off").onclick = () => {
   const nums = Object.keys(cards).map(Number);
