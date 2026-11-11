@@ -58,6 +58,8 @@
   .card .presets button { padding:3px 7px; font-size:12px; }
   .lock { border:1px solid #ff9f43; color:#ff9f43; border-radius:8px; padding:6px 10px; font-size:13px; }
   .bad { color:var(--bad); } .good { color:var(--ok); }
+  .maptag { font-size:11px; border:1px solid var(--accent); color:var(--accent); border-radius:999px; padding:1px 7px; margin-left:6px; }
+  #fc_table select { max-width:120px; }
   dialog { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:10px; padding:16px; max-width:340px; width:92vw; }
   dialog::backdrop { background:rgba(0,0,0,.5); }
   dialog .grid { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; margin:10px 0; }
@@ -82,9 +84,16 @@
     <div class="lock hidden" id="g_lock" style="margin-top:8px">Printing: mounting, docking, calibration and reloading offsets are locked. Temperatures, fans and filament still work.</div>
   </section>
   <section class="hidden" id="fcheck">
-    <h2>Filament check</h2>
+    <h2>Tool map and filament check</h2>
+    <div class="bar"><label for="mf_file">File</label> <select id="mf_file"><option value="">Current or last print</option></select></div>
     <div class="note" id="fc_file"></div>
     <table id="fc_table"></table>
+    <div class="bar" style="margin-top:8px">
+      <button id="m_suggest">Suggest from colours</button>
+      <button class="primary" id="m_save">Save map</button>
+      <button class="warn" id="m_reset">No map</button>
+    </div>
+    <div class="note" id="m_note"></div>
   </section>
   <div class="cards" id="cards"></div>
   <section>
@@ -183,11 +192,17 @@ let printing = false;      // a print is running or paused: tool changes are loc
 let toolSettings = {};     // _MOSAIC_TOOLS_SETTINGS (presets)
 let filaments = {};        // tool number -> saved filament
 let checkFile = "", checkMeta = null;   // filament check of the current print file
+let toolMap = {};          // saved map: slicer tool -> physical tool
+let mapDraft = null;       // the map being edited on the page (null = follow the saved one)
+let hasMap = false;        // MOSAIC_TOOL_MAP exists
+let toolFans = {};         // physical tool -> fan name, for the page's own fan slider
+let fileList = [], mapKey = "";
 
 const q = objs => "/printer/objects/query?" + objs.map(encodeURIComponent).join("&");
 const fmt = v => (v === undefined || v === null || isNaN(v)) ? "-" : Number(v).toFixed(1);
 
-function cmdMount(n) { return hasMosaicTools ? "T" + n : "SELECT_TOOL T=" + n; }
+// The page always means the physical tool, so it bypasses the tool map.
+function cmdMount(n) { return hasMosaicTools ? "_MOSAIC_T T=" + n + " MAP=0" : "SELECT_TOOL T=" + n; }
 function cmdTemp(n, t) { return (hasMosaicTools ? "MOSAIC_SET_TEMP T=" + n + " TARGET=" : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=") + t; }
 function cmdStandby(n) { return hasMosaicTools ? "MOSAIC_TOOL_STANDBY T=" + n : "SET_TOOL_TEMPERATURE T=" + n + " TARGET=0"; }
 
@@ -250,6 +265,8 @@ function buildCards(nums) {
     const h = document.createElement("h3");
     const title = document.createElement("span"); title.textContent = "T" + n;
     const where = document.createElement("span"); where.className = "pill dock"; where.textContent = "docked";
+    const tag = document.createElement("span"); tag.className = "maptag hidden";
+    title.appendChild(tag);
     h.append(title, where);
     const fil = document.createElement("div"); fil.className = "fil";
     const art = document.createElement("span"); art.innerHTML = hotendSvg("");
@@ -278,7 +295,10 @@ function buildCards(nums) {
     const fanLabel = document.createElement("div"); fanLabel.className = "mini";
     const fan = document.createElement("input"); fan.type = "range"; fan.min = 0; fan.max = 100; fan.step = 5; fan.value = 0;
     fan.addEventListener("input", () => { fanLabel.textContent = "Fan " + fan.value + " %"; });
-    fan.addEventListener("change", () => gcode("M106 S" + Math.round(fan.value * 2.55) + " T" + n, "T" + n + " fan " + fan.value + " %"));
+    fan.addEventListener("change", () => {
+      const fname = String(toolFans[n] || "").replace(/^fan_generic\s+/, "");
+      gcode(fname ? "SET_FAN_SPEED FAN=" + fname + " SPEED=" + (fan.value / 100) : "M106.1 S" + Math.round(fan.value * 2.55) + " T" + n, "T" + n + " fan " + fan.value + " %");
+    });
     fanRow.append(fanLabel, fan);
     const off = document.createElement("div"); off.className = "mini";
     const row2 = document.createElement("div"); row2.className = "row";
@@ -288,7 +308,7 @@ function buildCards(nums) {
     row2.append(mount, dock, cal);
     el.append(h, fil, temp, row1, pre, fanRow, off, row2);
     box.appendChild(el);
-    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock, cal, art, fmat, fname, fedit, pre, artKey: null, preKey: null };
+    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock, cal, art, fmat, fname, fedit, pre, tag, artKey: null, preKey: null };
   });
 }
 
@@ -307,6 +327,10 @@ function updateCards(o, nums, v) {
     c.where.textContent = mounted ? "mounted" : "docked";
     c.where.className = "pill " + (mounted ? "on" : "dock");
     c.mount.disabled = mounted || printing; c.dock.disabled = !mounted || printing; c.cal.disabled = printing;
+    toolFans[n] = ts.fan;
+    const as = Object.keys(toolMap).filter(k => toolMap[k] === n).map(k => "T" + k);
+    c.tag.textContent = as.length ? "prints as " + as.join(", ") : "";
+    c.tag.classList.toggle("hidden", !as.length);
     const f = filaments[n] || {};
     const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "");
     if (c.artKey !== key) {
@@ -352,7 +376,7 @@ function updateCards(o, nums, v) {
 async function refresh() {
   try {
     const base = ["toolchanger", "save_variables", "gcode_macro _MOSAIC_STATE", "gcode_macro _MOSAIC_SETTINGS",
-                  "gcode_macro _MOSAIC_TOOLS_SETTINGS", "gcode_macro _MOSAIC_LOG", "print_stats",
+                  "gcode_macro _MOSAIC_TOOLS_SETTINGS", "gcode_macro _MOSAIC_LOG", "gcode_macro MOSAIC_TOOL_MAP", "print_stats",
                   "mosaic_z_probe", "heater_bed", "toolhead"].concat(toolNames);
     const j = await api(q(base));
     const o = j.result.status;
@@ -379,6 +403,9 @@ async function refresh() {
     $("b_zq").classList.toggle("hidden", !o.mosaic_z_probe);
     const v = (o.save_variables && o.save_variables.variables) || {};
     filaments = {}; nums.forEach(n => { const f = v["t" + n + "_filament"]; if (f && typeof f === "object") filaments[n] = f; });
+    toolMap = {}; const sm = v.mosaic_tool_map;
+    if (sm && typeof sm === "object") Object.keys(sm).forEach(k => { toolMap[Number(k)] = Number(sm[k]); });
+    hasMap = !!o["gcode_macro MOSAIC_TOOL_MAP"];
     const ck = nums.join(",");
     if (ck !== cardKey) { cardKey = ck; buildCards(nums); }
     updateCards(o, nums, v);
@@ -413,7 +440,7 @@ function showLog(lg) {
   const h = document.createElement("tr"); ["Change", "Time", "Result"].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
   entries.forEach(e => {
     const r = document.createElement("tr");
-    r.appendChild(td((e.from >= 0 ? "T" + e.from : "none") + " \u2192 T" + e.to));
+    r.appendChild(td((e.from >= 0 ? "T" + e.from : "none") + " \u2192 T" + e.to + (e.as !== undefined && e.as !== e.to ? " (as T" + e.as + ")" : "")));
     r.appendChild(td(e.s >= 0 ? e.s.toFixed(1) + " s" : "-"));
     const res = td(e.run ? "running, or stopped with an error" : (e.ok ? "ok" : "failed"));
     res.className = e.run ? "note" : (e.ok ? "good" : "bad");
@@ -428,44 +455,116 @@ $("b_logreset").onclick = () => gcode("MOSAIC_TOOL_LOG RESET=1", "Clear the log"
 const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "").trim()); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
 const colourDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const listOf = x => Array.isArray(x) ? x : String(x || "").split(";").map(s => s.trim());
-async function filamentCheck(file, state, nums) {
-  if (!file) { checkFile = ""; checkMeta = null; $("fcheck").classList.add("hidden"); return; }
+// The table: one row per slicer tool, what the file expects, the physical tool
+// it prints on (the map), the filament loaded there, and whether they match.
+const phys = n => (mapDraft || toolMap)[n] !== undefined ? (mapDraft || toolMap)[n] : n;
+function compare(want, wtype, f) {
+  const have = hexRgb(f.color), htype = (f.material || "").toUpperCase(), diff = [];
+  if (!want && !wtype) return ["", "note"];
+  if (!f.material && !f.color) return ["no filament set", "note"];
+  if (wtype && htype && wtype !== htype) diff.push("material");
+  if (want && have && colourDist(want, have) > 80) diff.push("colour");
+  return diff.length ? ["different " + diff.join(" and "), "bad"] : ["match", "good"];
+}
+// Best physical tool for every slicer tool: same material and the closest colour.
+function suggestMap(used, colours, types, nums) {
+  const out = {}, taken = {};
+  const score = (n, p) => {
+    const f = filaments[p] || {}, want = hexRgb(colours[n]), have = hexRgb(f.color), wtype = (types[n] || "").toUpperCase(), htype = (f.material || "").toUpperCase();
+    if (!f.material && !f.color) return Infinity;
+    if (wtype && htype && wtype !== htype) return Infinity;
+    if (want && have) { const d = colourDist(want, have); return d > 80 ? Infinity : d; }
+    return want ? Infinity : 0;
+  };
+  const order = used.map(n => [n, Math.min(...nums.map(p => score(n, p)))]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+  order.forEach(n => {
+    let best = -1, bs = Infinity;
+    nums.forEach(p => {
+      const sameColour = taken[p] !== undefined && (colours[taken[p]] || "").toUpperCase() === (colours[n] || "").toUpperCase();
+      if (taken[p] !== undefined && !sameColour) return;
+      const sc = score(n, p) - (p === n ? 0.5 : 0);
+      if (sc < bs) { bs = sc; best = p; }
+    });
+    if (best >= 0) { out[n] = best; taken[best] = n; } else out[n] = nums.includes(n) ? n : nums[0];
+  });
+  return out;
+}
+let lastCheck = null;
+async function filamentCheck(printFile, state, nums) {
+  $("fcheck").classList.toggle("hidden", !hasMap && !printFile);
+  if (!hasMap && !printFile) return;
+  const file = $("mf_file").value || printFile;
   if (file !== checkFile) {
     checkFile = file; checkMeta = null;
-    try { checkMeta = (await api("/server/files/metadata?filename=" + encodeURIComponent(file))).result; } catch (e) { checkMeta = {}; }
+    if (file) { try { checkMeta = (await api("/server/files/metadata?filename=" + encodeURIComponent(file))).result; } catch (e) { checkMeta = {}; } }
   }
   const m = checkMeta || {};
   const colours = listOf(m.filament_colors || m.extruder_colors), types = listOf(m.filament_type), names = listOf(m.filament_name);
-  const used = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools : colours.map((_, i) => i).filter(i => colours[i]);
-  const rows = used.filter(n => nums.includes(n)).map(n => {
-    const want = hexRgb(colours[n]), wtype = (types[n] || "").toUpperCase(), f = filaments[n] || {};
-    const have = hexRgb(f.color), htype = (f.material || "").toUpperCase();
-    let res = "match", cls = "good";
-    const diff = [];
-    if (wtype && htype && wtype !== htype) diff.push("material");
-    if (want && have && colourDist(want, have) > 80) diff.push("colour");
-    if (!f.material && !f.color) { res = "no filament set for this tool"; cls = "note"; }
-    else if (diff.length) { res = "different " + diff.join(" and "); cls = "bad"; }
-    return { n, want: colours[n], wtype, wname: names[n] || "", have: f.color ? "#" + f.color : "", htype, res, cls };
+  let used = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools.slice() : colours.map((_, i) => i).filter(i => colours[i]);
+  if (!used.length) used = nums.length ? Array.from({ length: Math.max(...nums) + 1 }, (_, i) => i) : [];
+  used = used.filter(n => n >= 0 && n <= 9);
+  lastCheck = { used, colours, types, nums };
+  const rows = used.map(n => {
+    const p = phys(n), f = filaments[p] || {};
+    const [res, cls] = compare(hexRgb(colours[n]), (types[n] || "").toUpperCase(), f);
+    return { n, p, want: colours[n] || "", wtype: (types[n] || "").toUpperCase(), wname: names[n] || "", f, res, cls };
   });
-  $("fcheck").classList.toggle("hidden", !rows.length);
-  if (!rows.length) return;
+  const key = JSON.stringify([file, rows, mapDraft, toolMap, printing, nums]);
+  if (key === mapKey) return;
+  mapKey = key;
   const bad = rows.filter(r => r.cls === "bad").length;
-  $("fc_file").textContent = (state === "printing" || state === "paused" ? "Printing " : "Last file: ") + file +
-    (bad ? " \u2014 " + (bad > 1 ? bad + " tools do not" : "1 tool does not") + " match what the file expects." : " \u2014 the loaded filament matches.");
+  const live = file === printFile && (state === "printing" || state === "paused");
+  $("fc_file").textContent = !file ? "No file chosen: the map for every tool. Choose a file to compare its colours."
+    : (live ? "Printing " : "File: ") + file + (bad ? " — " + (bad > 1 ? bad + " tools do not" : "1 tool does not") + " match what the file expects." : " — the loaded filament matches.");
   $("fc_file").className = bad ? "bad" : "note";
   const t = $("fc_table"); t.textContent = "";
-  const h = document.createElement("tr"); ["Tool", "File expects", "Loaded", ""].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
-  const cell = (col, text) => { const e = document.createElement("td"); if (hexRgb(col)) { const s = document.createElement("span"); s.className = "sw"; s.style.background = col; e.appendChild(s); } e.appendChild(document.createTextNode(text || "-")); return e; };
+  const h = document.createElement("tr"); ["Slicer", "File expects", "Prints on", "Loaded there", ""].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
+  const cell = (col, text) => { const e = document.createElement("td"); if (hexRgb(col)) { const s = document.createElement("span"); s.className = "sw"; s.style.background = col.startsWith("#") ? col : "#" + col; e.appendChild(s); } e.appendChild(document.createTextNode(text || "-")); return e; };
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.appendChild(td("T" + r.n));
     tr.appendChild(cell(r.want, [r.wtype, r.wname && r.wname.toUpperCase() !== r.wtype ? r.wname : ""].filter(Boolean).join(" ")));
-    tr.appendChild(cell(r.have, [r.htype, (filaments[r.n] || {}).name].filter(Boolean).join(" ")));
+    const sc = document.createElement("td"), sel = document.createElement("select");
+    nums.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = "T" + p + (p === r.n ? "" : " (mapped)"); sel.appendChild(o); });
+    sel.value = String(r.p); sel.disabled = printing || !hasMap;
+    sel.onchange = () => { mapDraft = Object.assign({}, mapDraft || toolMap); const v = Number(sel.value); if (v === r.n) delete mapDraft[r.n]; else mapDraft[r.n] = v; mapKey = ""; filamentCheck(printFile, state, nums); };
+    sc.appendChild(sel); tr.appendChild(sc);
+    tr.appendChild(cell(r.f.color ? "#" + r.f.color : "", [r.f.material, r.f.name].filter(Boolean).join(" ")));
     const res = td(r.res); res.className = r.cls; tr.appendChild(res);
     t.appendChild(tr);
   });
+  ["m_suggest", "m_save", "m_reset"].forEach(id => { $(id).disabled = printing || !hasMap; });
+  $("m_suggest").disabled = $("m_suggest").disabled || !colours.some(Boolean);
+  const dirty = mapDraft && JSON.stringify(mapDraft) !== JSON.stringify(toolMap);
+  const saved = Object.keys(toolMap).sort().map(k => "T" + k + " → T" + toolMap[k]);
+  $("m_note").textContent = !hasMap ? "The tool map needs mosaic_tools.cfg." : printing ? "The map cannot be changed while printing." :
+    (dirty ? "Not saved yet. " : "") + (saved.length ? "Saved map: " + saved.join(", ") + "." : "No map saved: every slicer tool prints on the tool with the same number.");
 }
+$("m_suggest").onclick = () => {
+  if (!lastCheck) return;
+  const sug = suggestMap(lastCheck.used, lastCheck.colours, lastCheck.types, lastCheck.nums);
+  mapDraft = {}; Object.keys(sug).forEach(k => { if (Number(k) !== sug[k]) mapDraft[k] = sug[k]; });
+  mapKey = ""; refresh();
+};
+$("m_save").onclick = () => {
+  const m = mapDraft || toolMap, pairs = Object.keys(m).filter(k => Number(k) !== m[k]).map(k => k + ":" + m[k]);
+  mapDraft = null; mapKey = "";
+  gcode(pairs.length ? 'MOSAIC_TOOL_MAP MAP="' + pairs.join(",") + '"' : "MOSAIC_TOOL_MAP RESET=1", "Tool map");
+};
+$("m_reset").onclick = () => { mapDraft = null; mapKey = ""; gcode("MOSAIC_TOOL_MAP RESET=1", "No tool map"); };
+async function loadFiles() {
+  try {
+    const r = (await api("/server/files/list?root=gcodes")).result || [];
+    fileList = r.filter(f => /\.(gcode|g|gco)$/i.test(f.path)).sort((a, b) => b.modified - a.modified).slice(0, 30);
+    const sel = $("mf_file"), cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    fileList.forEach(f => { const o = document.createElement("option"); o.value = o.textContent = f.path; sel.appendChild(o); });
+    sel.value = fileList.some(f => f.path === cur) ? cur : "";
+  } catch (e) { /* no file list: only the current print is checked */ }
+}
+$("mf_file").onfocus = loadFiles;
+$("mf_file").onchange = () => { mapKey = ""; refresh(); };
+loadFiles();
 
 $("g_off").onclick = () => {
   const nums = Object.keys(cards).map(Number);

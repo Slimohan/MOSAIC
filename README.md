@@ -52,7 +52,7 @@ made-up demo data, not a real machine.
 |---|---|
 | `mosaic.cfg` | The calibration macros. |
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
-| `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
+| `mosaic_slicer.cfg` | Optional. `M104` / `M109` / `M106` / `M107` with a `T` parameter for slicers, following the tool map. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
 | `config/` | Templates for your MOSAIC folder: tools, hardware, dock positions, switches, settings. `install.sh` copies them once. |
 | `docs/` | The docking guide and examples of dock layouts. |
@@ -211,7 +211,7 @@ after_change_gcode:
 ```
 
 Klipper's cold-extrusion check then works for every tool, and slicer lines like `M104 T1 S220` reach the right
-heater without `mosaic_tool_heaters.cfg` (include it anyway if you use the standby handling, see below). Use
+heater without `mosaic_slicer.cfg` (switch it on anyway if you use the standby handling or the tool map, see below). Use
 `after_change_gcode` as shown rather than klipper-toolchanger's own `extruder_stepper:` tool option: that option
 passes the full section name (`extruder_stepper shared_drive`) to `SYNC_EXTRUDER_MOTION`, which expects the short
 name, so the hand-over fails.
@@ -239,7 +239,7 @@ Things to know for this layout:
   slicer.
 - **M104 / M109.** Klipper's own `M104` and `M109` only know `[extruder]` heaters, and klipper-toolchanger does not
   wrap them. Slicer lines like `M104 T1 S220` therefore do nothing for a `heater_generic` tool. Include
-  `mosaic_tool_heaters.cfg` (see below) or let the slicer use `SET_TOOL_TEMPERATURE T=1 TARGET=220`.
+  `mosaic_slicer.cfg` (see below) or let the slicer use `SET_TOOL_TEMPERATURE T=1 TARGET=220`.
 
 For both layouts:
 
@@ -265,6 +265,7 @@ first. If a `[tool Tn]` section is left in `printer.cfg` above the include line,
 | `MOSAIC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target, filament. |
 | `MOSAIC_SET_FILAMENT [T=] MATERIAL= NAME= COLOR= TEMP= [CLEAR=1]` | The filament loaded in a tool, see "Filament per tool". |
 | `MOSAIC_TOOL_LOG [RESET=1]` | The last tool changes with their time and result. |
+| `MOSAIC_TOOL_MAP [T= TO=] [MAP="0:3,2:1"] [RESET=1]` | Send slicer tools to other physical tools, see "Tool map". No parameters: show the map. |
 
 `_MOSAIC_TOOLS_SETTINGS` has the settings `standby_mode`, `standby_temp`, `wait_on_select` and `presets`. With `standby_mode: 'off'`
 (default) a tool change does not touch any heater, which is right when the slicer sends its own standby
@@ -279,7 +280,7 @@ frontends that read it.
 
 ### M104 and M109 with T
 
-`mosaic_tool_heaters.cfg` wraps `M104` and `M109` so `T` selects the tool and no `T` means the mounted tool. Without
+`mosaic_slicer.cfg` wraps `M104`, `M109`, `M106` and `M107` so `T` selects the tool (and follows the tool map) and no `T` means the mounted tool. Switch it on in `00_core.cfg`. Without
 a mounted tool and without `T` the original command runs. `M109` waits for the tool it names; it does not
 mount it. Do not include it together with `beacon_heater_hooks.cfg`: both define the macros `M104` and `M109`,
 Klipper does not complain but merges them, and the file included last silently wins. This file calls the
@@ -324,6 +325,43 @@ slicer wrote into the file (Moonraker's file metadata, filled by OrcaSlicer, Pru
 and compares them with the filament saved for each tool the file uses. A material that differs, or a colour that is
 clearly different, is marked in red. The check only warns; it does not stop the print, and it needs the filament set
 for the tools.
+
+### Tool map
+
+The tool map sends a slicer tool to another physical tool. A file wants red PLA on T0, and the red PLA is loaded in
+T3: map T0 to T3 and print, no re-slicing. Two slicer tools may share one physical tool.
+
+On the page, the **Tool map and filament check** section has one row per slicer tool: what the file expects, the
+physical tool it prints on (a drop-down), the filament loaded there and whether they match. Choose a file from the
+list (the 30 newest), press **Suggest from colours** to let MOSAIC pick the tool with the same material and the closest
+colour for every slicer tool, check the rows, and **Save map**. **No map** sends every slicer tool to the tool with its
+own number again. The cards show which slicer tool a physical tool prints as. The map cannot be changed while a print
+runs.
+
+In the console:
+
+```
+MOSAIC_TOOL_MAP T=0 TO=3          slicer T0 prints on tool 3
+MOSAIC_TOOL_MAP T=0               T0 back to itself
+MOSAIC_TOOL_MAP MAP="0:3,2:1"     the whole map at once
+MOSAIC_TOOL_MAP RESET=1           no map
+MOSAIC_TOOL_MAP                   show it
+```
+
+What follows the map:
+
+- the `T0` ... `T9` commands (the slicer's tool changes),
+- with `mosaic_slicer.cfg` switched on in `00_core.cfg`: `M104`, `M109`, `M106` and `M107` with `T` (or `P` for the fans).
+  Without it only the tool changes follow the map and `M104 T0` still heats tool 0; `MOSAIC_TOOL_MAP` and
+  `MOSAIC_CHECK` warn about that.
+
+What does not, on purpose: `SELECT_TOOL`, `SET_TOOL_TEMPERATURE`, the calibration, and the buttons on the page, which
+always mean the physical tool. Slicer start G-code that heats tools with `SET_TOOL_TEMPERATURE`, or passes temperatures
+per tool to `PRINT_START`, is not remapped either: use `M104 T..` there. Offsets, heaters and filament belong to the
+physical tool, so they come along by themselves.
+
+The map is saved and stays until you change it, also after a restart. If a map is only for one print, put
+`MOSAIC_TOOL_MAP RESET=1` into `PRINT_END`. The tool change log shows mapped changes as `T1 -> T3 (as T0)`.
 
 ### Tool change log
 

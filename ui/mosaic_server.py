@@ -24,6 +24,7 @@ ALLOWED = (
     "/printer/objects/query",
     "/printer/info",
     "/server/files/metadata",
+    "/server/files/list",
 )
 
 
