@@ -1,9 +1,10 @@
 #!/bin/sh
 # MOSAIC installer. Run it from the MOSAIC download (normally ~/MOSAIC):
 #   1. Creates your MOSAIC folder in the Klipper config folder
-#      (~/printer_data/config/MOSAIC) with your config files and a link
-#      core/ -> this download, and adds  [include MOSAIC/*.cfg]  to
-#      printer.cfg. Your files are never overwritten.
+#      (~/printer_data/config/MOSAIC) with your one config file, mosaic.cfg,
+#      and a link core/ -> this download, and adds  [include MOSAIC/mosaic.cfg]
+#      to printer.cfg. Your file is never overwritten. An older install with
+#      numbered files (00_core.cfg ...) is joined into mosaic.cfg.
 #   2. Links the optional Z switch module into Klipper and Kalico.
 #   3. Sets up the MOSAIC page: a service, the page at http://<printer>/mosaic/
 #      through Mainsail's web server, a MOSAIC entry in Mainsail's sidebar,
@@ -37,33 +38,64 @@ if [ -e "$dest/core" ] && [ ! -L "$dest/core" ]; then
 fi
 ln -sfn "$here" "$dest/core"
 echo "MOSAIC folder: $dest (core -> $here)"
-# your dock positions from an older install, next to printer.cfg
-if [ -f "$conf/mosaic_dock_positions.cfg" ] && [ ! -e "$dest/20_dock_positions.cfg" ]; then
+# Your files from an older install:
+# - dock positions that lived next to printer.cfg
+if [ -f "$conf/mosaic_dock_positions.cfg" ] && [ ! -e "$dest/mosaic.cfg" ] && [ ! -e "$dest/20_dock_positions.cfg" ]; then
     mv "$conf/mosaic_dock_positions.cfg" "$dest/20_dock_positions.cfg"
-    echo "moved your mosaic_dock_positions.cfg to $dest/20_dock_positions.cfg"
+    echo "moved your mosaic_dock_positions.cfg into $dest"
 fi
-for f in "$here"/config/*.cfg; do
-    name=$(basename "$f")
-    if [ ! -e "$dest/$name" ]; then
-        cp "$f" "$dest/$name"
-        echo "  created $name"
-    elif ! cmp -s "$f" "$dest/$name"; then
-        cp "$f" "$dest/$name.new"
-        echo "  kept your $name (the current template is saved as $name.new)"
+# - the numbered files (00_core.cfg ... 90_settings.cfg): joined into one mosaic.cfg
+#   in the order Klipper used to load them, the old files go to MOSAIC/old/
+old=$(ls "$dest"/[0-9][0-9]_*.cfg 2>/dev/null || true)
+if [ -n "$old" ] && [ ! -e "$dest/mosaic.cfg" ]; then
+    mkdir -p "$dest/old"
+    {
+        echo "# MOSAIC: your configuration. This is the ONE file you edit."
+        echo "# Joined from your numbered files by the installer, in the order they loaded."
+        echo "# The originals are in the old/ folder next to this file. The current template,"
+        echo "# with the explanations for every section, is in core/config/mosaic.cfg."
+        echo
+    } > "$dest/mosaic.cfg"
+    for f in $old; do
+        name=$(basename "$f")
+        { echo "# ===== from $name ====="; cat "$f"; echo; } >> "$dest/mosaic.cfg"
+        mv "$f" "$dest/old/$name"
+    done
+    echo "joined your numbered files into $dest/mosaic.cfg (originals: $dest/old/)"
+fi
+if [ ! -e "$dest/mosaic.cfg" ]; then
+    cp "$here/config/mosaic.cfg" "$dest/mosaic.cfg"
+    echo "  created mosaic.cfg - this is the one file you edit"
+elif ! cmp -s "$here/config/mosaic.cfg" "$dest/mosaic.cfg"; then
+    if [ -d "$dest/old" ] && grep -q "^# Joined from your numbered files" "$dest/mosaic.cfg"; then
+        :   # a joined file always differs from the template, nothing to compare
+    else
+        cp "$here/config/mosaic.cfg" "$dest/mosaic.cfg.new"
+        echo "  kept your mosaic.cfg (the current template is saved as mosaic.cfg.new)"
     fi
-done
+fi
 # the one line in printer.cfg
-if grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
-    echo "printer.cfg already includes MOSAIC/*.cfg"
+if grep -q "^\[include MOSAIC/mosaic\.cfg\]" "$conf/printer.cfg"; then
+    echo "printer.cfg already includes MOSAIC/mosaic.cfg"
+elif grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
+    cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-backup"
+    sed -i "s|^\[include MOSAIC/\*\.cfg\]|[include MOSAIC/mosaic.cfg]|" "$conf/printer.cfg"
+    echo "printer.cfg: [include MOSAIC/*.cfg] changed to [include MOSAIC/mosaic.cfg] (backup: printer.cfg.mosaic-backup)"
 else
     cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-backup"
-    { echo "[include MOSAIC/*.cfg]"; cat "$conf/printer.cfg.mosaic-backup"; } > "$conf/printer.cfg"
-    echo "added [include MOSAIC/*.cfg] at the top of printer.cfg (backup: printer.cfg.mosaic-backup)"
+    { echo "[include MOSAIC/mosaic.cfg]"; cat "$conf/printer.cfg.mosaic-backup"; } > "$conf/printer.cfg"
+    echo "added [include MOSAIC/mosaic.cfg] at the top of printer.cfg (backup: printer.cfg.mosaic-backup)"
 fi
 if grep -qE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg"; then
     echo "NOTE: printer.cfg still has includes from an older MOSAIC install:"
     grep -nE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg" | sed 's/^/    /'
-    echo "      remove them, the MOSAIC folder loads everything now"
+    echo "      remove them, MOSAIC/mosaic.cfg loads everything now"
+fi
+stray=$(ls "$dest"/*.cfg 2>/dev/null | grep -v "/mosaic\.cfg$" || true)
+if [ -n "$stray" ]; then
+    echo "NOTE: only mosaic.cfg is loaded from $dest. These files are NOT loaded any more:"
+    echo "$stray" | sed 's/^/    /'
+    echo "      add an [include ...] line at the end of mosaic.cfg for any you still need"
 fi
 
 # --- 2. Z switch module ------------------------------------------------------
@@ -178,8 +210,7 @@ CONF
 fi
 
 echo
-echo "Next: edit the files in $dest (in Mainsail: Machine > MOSAIC):"
-echo "  40_tools.cfg, 10_hardware.cfg, 90_settings.cfg, then 50_switches.cfg and 20_dock_positions.cfg."
-echo "Move your [tool Tn], tool heater/fan and [toolchanger] sections from printer.cfg into them."
+echo "Next: edit $dest/mosaic.cfg (in Mainsail: Machine > MOSAIC > mosaic.cfg), section by section."
+echo "Move your [tool Tn], tool heater/fan and [toolchanger] sections from printer.cfg into it."
 echo "Then restart Klipper and run MOSAIC_CHECK."
 [ -z "$NO_WEB" ] && echo "MOSAIC page: reload Mainsail and click MOSAIC in the sidebar."

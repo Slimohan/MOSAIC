@@ -1,6 +1,6 @@
 #!/bin/sh
 # MOSAIC uninstaller: undoes what install.sh set up.
-#   - the [include MOSAIC/*.cfg] line in printer.cfg (a backup is kept)
+#   - the [include MOSAIC/mosaic.cfg] line in printer.cfg (a backup is kept)
 #   - the core link in your MOSAIC folder
 #   - the mosaic-ui service
 #   - the /mosaic/ include in Mainsail's nginx site (a backup is kept)
@@ -8,7 +8,7 @@
 #   - [update_manager mosaic] in moonraker.conf and mosaic-ui in moonraker.asvc (backups are kept)
 #   - the Z switch module links in Klipper and Kalico
 #
-# Your MOSAIC folder with your files (tools, settings, dock positions) and the
+# Your MOSAIC folder with your mosaic.cfg (tools, settings, dock positions) and the
 # saved offsets and filaments in [save_variables] are kept. Your tools and the
 # [toolchanger] section live in that folder: move them back into printer.cfg
 # if you keep using the tool changer without MOSAIC.
@@ -23,10 +23,10 @@ conf="${CONF:-$HOME/printer_data/config}"
 stamp=$(date +%Y%m%d-%H%M%S)
 
 # --- printer.cfg and the core link -----------------------------------------
-if [ -f "$conf/printer.cfg" ] && grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
+if [ -f "$conf/printer.cfg" ] && grep -qE "^\[include MOSAIC/(mosaic|\*)\.cfg\]" "$conf/printer.cfg"; then
     cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-uninstall-$stamp"
-    sed -i "/^\[include MOSAIC\/\*\.cfg\]/d" "$conf/printer.cfg"
-    echo "printer.cfg: [include MOSAIC/*.cfg] removed (backup: printer.cfg.mosaic-uninstall-$stamp)"
+    sed -i -E "/^\[include MOSAIC\/(mosaic|\*)\.cfg\]/d" "$conf/printer.cfg"
+    echo "printer.cfg: the MOSAIC include removed (backup: printer.cfg.mosaic-uninstall-$stamp)"
 fi
 if [ -L "$conf/MOSAIC/core" ]; then
     rm -f "$conf/MOSAIC/core"
@@ -127,7 +127,7 @@ done
 echo
 echo "Left for you to do:"
 echo "  - if you keep the tool changer: move your [tool Tn], heater/fan and [toolchanger] sections"
-echo "    from $conf/MOSAIC/40_tools.cfg and 30_toolchanger.cfg back into printer.cfg (without the MOSAIC dock hooks)"
+echo "    from sections 4 and 5 of $conf/MOSAIC/mosaic.cfg back into printer.cfg (without the MOSAIC dock hooks)"
 echo "  - restart Klipper"
 echo "  - delete $conf/MOSAIC and $here when you no longer want them"
-echo "Kept: your files in $conf/MOSAIC and the MOSAIC values in [save_variables]."
+echo "Kept: your mosaic.cfg in $conf/MOSAIC and the MOSAIC values in [save_variables]."
