@@ -2,10 +2,10 @@
 # MOSAIC uninstaller: undoes what install.sh set up.
 #   - the [include MOSAIC/mosaic.cfg] line in printer.cfg (a backup is kept)
 #   - the core link in your MOSAIC folder
-#   - the mosaic-ui service
+#   - the mosaic service (and mosaic-ui, its name in an earlier version)
 #   - the /mosaic/ include in Mainsail's nginx site (a backup is kept)
 #   - the MOSAIC entry in Mainsail's sidebar (.theme/navi.json)
-#   - [update_manager mosaic] in moonraker.conf and mosaic-ui in moonraker.asvc (backups are kept)
+#   - [update_manager mosaic] in moonraker.conf and mosaic in moonraker.asvc (backups are kept)
 #   - the Z switch module links in Klipper and Kalico
 #
 # Your MOSAIC folder with your mosaic.cfg (tools, settings, dock positions) and the
@@ -34,12 +34,13 @@ if [ -L "$conf/MOSAIC/core" ]; then
 fi
 
 # --- the service ------------------------------------------------------------
-unit=/etc/systemd/system/mosaic-ui.service
-if [ -f "$unit" ]; then
-    sudo systemctl disable --now mosaic-ui >/dev/null 2>&1 || true
-    sudo rm -f "$unit"
+if [ -f /etc/systemd/system/mosaic.service ] || [ -f /etc/systemd/system/mosaic-ui.service ]; then
+    for svc in mosaic mosaic-ui; do
+        sudo systemctl disable --now $svc >/dev/null 2>&1 || true
+        sudo rm -f /etc/systemd/system/$svc.service
+    done
     sudo systemctl daemon-reload
-    echo "service mosaic-ui removed"
+    echo "service mosaic removed"
 else
     echo "service: not installed"
 fi
@@ -105,9 +106,9 @@ PY
     sudo systemctl restart moonraker 2>/dev/null || true
 fi
 asvc="$(dirname "$conf")/moonraker.asvc"
-if [ -f "$asvc" ] && grep -qx "mosaic-ui" "$asvc"; then
-    sed -i "/^mosaic-ui$/d" "$asvc"
-    echo "removed mosaic-ui from $asvc"
+if [ -f "$asvc" ] && grep -qxE "mosaic|mosaic-ui" "$asvc"; then
+    sed -i -E "/^(mosaic|mosaic-ui)$/d" "$asvc"
+    echo "removed mosaic from $asvc"
 fi
 
 # --- Z switch module ---------------------------------------------------------

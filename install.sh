@@ -118,7 +118,13 @@ done
 if [ -z "$NO_WEB" ]; then
     echo "--- MOSAIC page"
     user=$(id -un)
-    unit=/etc/systemd/system/mosaic-ui.service
+    unit=/etc/systemd/system/mosaic.service
+    # An earlier version called the service mosaic-ui; Moonraker only accepts the name "mosaic".
+    if [ -f /etc/systemd/system/mosaic-ui.service ]; then
+        sudo systemctl disable --now mosaic-ui >/dev/null 2>&1 || true
+        sudo rm -f /etc/systemd/system/mosaic-ui.service
+        echo "renamed the old service mosaic-ui to mosaic"
+    fi
     tmp=$(mktemp)
     cat > "$tmp" <<UNIT
 [Unit]
@@ -133,9 +139,9 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 UNIT
-    if sudo install -m 644 "$tmp" "$unit" && sudo systemctl daemon-reload && sudo systemctl enable --now mosaic-ui >/dev/null 2>&1; then
-        sudo systemctl restart mosaic-ui
-        echo "service mosaic-ui installed and running (user $user)"
+    if sudo install -m 644 "$tmp" "$unit" && sudo systemctl daemon-reload && sudo systemctl enable --now mosaic >/dev/null 2>&1; then
+        sudo systemctl restart mosaic
+        echo "service mosaic installed and running (user $user)"
     else
         echo "could not install the service (sudo?), see README 'The web page' for the manual steps"
     fi
@@ -143,9 +149,12 @@ UNIT
 
     # Let Moonraker restart the service (needed for the update panel).
     asvc="$(dirname "$conf")/moonraker.asvc"
-    if [ -f "$asvc" ] && ! grep -qx "mosaic-ui" "$asvc"; then
-        echo "mosaic-ui" >> "$asvc"
-        echo "added mosaic-ui to $asvc"
+    if [ -f "$asvc" ]; then
+        sed -i "/^mosaic-ui$/d" "$asvc"
+        if ! grep -qx "mosaic" "$asvc"; then
+            echo "mosaic" >> "$asvc"
+            echo "added mosaic to $asvc"
+        fi
     fi
 
     # The page at /mosaic/ inside Mainsail's nginx site.
@@ -192,7 +201,14 @@ PY
     mconf="$conf/moonraker.conf"
     if [ -f "$mconf" ]; then
         if grep -q "^\[update_manager mosaic\]" "$mconf"; then
-            echo "update panel: already in moonraker.conf"
+            if grep -q "^managed_services:.*mosaic-ui" "$mconf"; then
+                cp "$mconf" "$mconf.mosaic-backup"
+                sed -i "s/^\(managed_services:.*\)mosaic-ui/\1mosaic/" "$mconf"
+                sudo systemctl restart moonraker 2>/dev/null || true
+                echo "update panel: fixed managed_services in moonraker.conf (backup: moonraker.conf.mosaic-backup), Moonraker restarted"
+            else
+                echo "update panel: already in moonraker.conf"
+            fi
         else
             cat >> "$mconf" <<CONF
 
@@ -201,7 +217,7 @@ type: git_repo
 path: $here
 origin: https://github.com/Slimohan/MOSAIC.git
 primary_branch: main
-managed_services: klipper mosaic-ui
+managed_services: klipper mosaic
 CONF
             sudo systemctl restart moonraker 2>/dev/null || true
             echo "update panel: MOSAIC added to moonraker.conf, Moonraker restarted"
