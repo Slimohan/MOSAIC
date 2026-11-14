@@ -4,7 +4,7 @@ Pick-up and drop-off macros for a **hotend-only toolchanger with a passive (Maxw
 
 This is the docking part of MOSAIC. The calibration (`mosaic.cfg`) and the tool commands (`mosaic_tools.cfg`) use it for every tool change; it can also be used on its own. Back to the [main README](../README.md).
 
-> **Status: written and tested in simulation only.** The macros were run against the real klipper-toolchanger module in Klipper's and Kalico's batch mode (all planned moves checked, errors checked). They have **not** been run on a printer. Your dock geometry is not known to the macros, so the numbers in `MOSAIC/20_dock_positions.cfg` are placeholders until you teach them. Do the first runs slowly, hand on the power switch. See [Before the first real tool change](#before-the-first-real-tool-change).
+> **Status: written and tested in simulation only.** The macros were run against the real klipper-toolchanger module in Klipper's and Kalico's batch mode (all planned moves checked, errors checked). They have **not** been run on a printer. Your dock geometry is not known to the macros, so the numbers in section 7 of `MOSAIC/mosaic.cfg` are placeholders until you teach them. Do the first runs slowly, hand on the power switch. See [Before the first real tool change](#before-the-first-real-tool-change).
 
 ## What it assumes
 
@@ -38,11 +38,11 @@ Safety built in:
 ## Install
 
 Docking is installed with the rest of MOSAIC (see [Installation](../README.md#installation) in the main README).
-Everything is already in your `MOSAIC` folder:
+Everything is already in your one file, `MOSAIC/mosaic.cfg`:
 
-- `00_core.cfg` loads the dock engine (`core/mosaic_dock.cfg`).
-- `20_dock_positions.cfg` is your dock positions file. Updates never touch it.
-- `30_toolchanger.cfg` has the two hooks in `[toolchanger]` that run the dock macros for every tool change:
+- Section 1 loads the dock engine (`core/mosaic_dock.cfg`).
+- Section 7 is your dock positions. Updates never touch the file.
+- Section 4 has the two hooks in `[toolchanger]` that run the dock macros for every tool change:
 
   ```
   [toolchanger]
@@ -60,7 +60,7 @@ up and warns if the hooks are missing. Until you teach the docks it will report 
 
 ## Set up the docks
 
-Open `MOSAIC/20_dock_positions.cfg`. Part 1 has the shared settings, part 2 has one section per tool.
+Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the shared settings, part 2 has one section per tool.
 
 **Shared settings (set these first, conservatively):**
 
@@ -86,7 +86,7 @@ With a tool standing in its dock and the carriage free:
 
 1. `G28`, then jog the carriage by hand in Mainsail (small steps near the end) until the coupling sits fully seated on the tool.
 2. `MOSAIC_DOCK_TEACH T=0`. The current carriage position is stored for now and the lines to keep it are printed in the console.
-3. Paste those lines into `[gcode_macro _MOSAIC_DOCK_T0]` in `MOSAIC/20_dock_positions.cfg`. (`SAVE_CONFIG` does not store these, they are plain macro variables. Without pasting, the value is lost at the next restart.)
+3. Paste those lines into `[gcode_macro _MOSAIC_DOCK_T0]` in section 7 of `MOSAIC/mosaic.cfg`. (`SAVE_CONFIG` does not store these, they are plain macro variables. Without pasting, the value is lost at the next restart.)
 
 Docks in an even row: teach one, then `MOSAIC_DOCK_FILL FROM=0 TO=5 DX=45` calculates T1 to T5 at 45 mm spacing. The numbers are computed, not measured, check each dock with the next step.
 
@@ -127,7 +127,7 @@ pin: ^PA2
 press_gcode:
 ```
 
-The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. Ready-made sections are in `MOSAIC/50_switches.cfg`.
+The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. Ready-made sections are in section 6 of `MOSAIC/mosaic.cfg`.
 
 **At the dock** (what these macros do, with `check_switches: 1`):
 
