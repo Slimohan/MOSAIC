@@ -57,7 +57,7 @@ made-up demo data, not a real machine.
 | `config/` | Templates for your MOSAIC folder: tools, hardware, dock positions, switches, settings. `install.sh` copies them once. |
 | `docs/` | The docking guide and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
-| `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail. |
+| `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail or Fluidd. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
 | `examples/mainsail/` | The Mainsail sidebar entry. |
 | `install.sh` | Creates your MOSAIC folder, adds its one include line to `printer.cfg`, links the Z switch module, and sets up the web page with its Mainsail sidebar entry and update panel entry. |
@@ -74,8 +74,8 @@ made-up demo data, not a real machine.
   sit rigid: bolted to the bed frame or the printer, not on a flexing plate.
   Nudge needs about 6 mm of overtravel for the pin to wobble.
 - Optional: a switch for Z.
-- For the sidebar entry and the update panel: Mainsail and Moonraker (the standard KIAUH or MainsailOS setup), and
-  `sudo` rights for the installer.
+- For the web page and the update panel: Moonraker with Mainsail or Fluidd (the standard KIAUH, MainsailOS or FluiddPi
+  setup), and `sudo` rights for the installer. The sidebar entry is Mainsail only; Fluidd users bookmark the page.
 
 ## Installation
 
@@ -110,15 +110,15 @@ It does three things:
   overwrites a file of yours; if a template changed, the new one is saved beside yours with `.new` at the end.
 - **Links the optional Z switch module** into `~/klipper` or `~/kalico`. You only need this if you add the separate Z
   switch. If your Klipper or Kalico is somewhere else, pass the path: `./install.sh /path/to/klipper`.
-- **Sets up the MOSAIC page and adds it to Mainsail's sidebar.** After a reload of Mainsail there is a **MOSAIC**
-  entry on the left, and clicking it opens the page where you control and calibrate the tools. The installer
+- **Sets up the MOSAIC page.** In Mainsail there is a **MOSAIC** entry in the sidebar after a reload; in Fluidd, open
+  `http://<printer>/mosaic/` and bookmark it. The page is where you control and calibrate the tools. The installer
   asks for your password (sudo) for this part. Details in "The web page" below; skip it with `NO_WEB=1 ./install.sh`.
 
 If your config folder is not `~/printer_data/config`: `CONF=/path/to/config ./install.sh`.
 
 ### 3. Fill in `mosaic.cfg`
 
-In Mainsail, open **Machine** and then the `MOSAIC` folder:
+In Mainsail open **Machine** (Fluidd: **Configuration**) and then the `MOSAIC` folder:
 
 ```
 MOSAIC/
@@ -160,7 +160,7 @@ It reports anything that is missing, including the docking (it runs `MOSAIC_DOCK
 
 ### Updating
 
-The installer adds MOSAIC to Mainsail's update panel (**Machine** page), so it updates like Klipper and Moonraker. An
+The installer adds MOSAIC to the Moonraker update panel (Mainsail: **Machine** page, Fluidd: the software updates card), so it updates like Klipper and Moonraker. An
 update only replaces `~/MOSAIC` (what `core/` points to); your files in the MOSAIC folder are never touched. Without
 the update panel, run `git pull` in `~/MOSAIC` and restart Klipper. After an update, run `./install.sh` once more if the
 release notes say a template changed: it saves the new template beside yours as `.new` for you to compare.
@@ -470,7 +470,7 @@ G-code stops with an error. Then:
 ## The web page
 
 The page works on a phone or a computer, and needs only the Python that is already on the printer. `install.sh` sets
-it up; click **MOSAIC** in Mainsail's sidebar to open it.
+it up; click **MOSAIC** in Mainsail's sidebar to open it (Fluidd: go to `http://<printer>/mosaic/`).
 
 One card per tool, up to ten: mounted or docked, current and target temperature with a
 state (off, heating, ready, cooling), a field and buttons to set the temperature, put the tool on standby or
@@ -491,22 +491,27 @@ on a trusted network.
 ### What the installer sets up
 
 - **The service** `mosaic` runs the page server (`ui/mosaic_server.py`) as your user. It listens only on the
-  printer itself (port 8099); you reach it through Mainsail's web server.
+  printer itself (port 8099); you reach it through the web server of Mainsail or Fluidd.
 - **The address `http://<printer>/mosaic/`.** The installer adds one `include` line for `ui/nginx-mosaic.conf` to
-  Mainsail's nginx site (`/etc/nginx/sites-available/mainsail`), checks it with `nginx -t`, and puts the original
-  back if the check fails. A backup is kept as `mainsail.mosaic-backup`. Because the page shares Mainsail's address,
-  the sidebar entry works however you reach the printer (IP address, host name, VPN). If your site file has another
-  name, run `NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh`.
+  the nginx site of Mainsail and/or Fluidd (`/etc/nginx/sites-available/mainsail` and `fluidd`, whichever exist; if you
+  run both, each gets it), checks it with `nginx -t`, and puts the original back if the check fails. A backup is kept
+  as `<site>.mosaic-backup`. Because the page shares the address of your interface, it works however you reach the
+  printer (IP address, host name, VPN). If your site file has another name, run
+  `NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh`.
 - **The sidebar entry.** Mainsail reads extra sidebar entries from `.theme/navi.json` in the config folder. The
   installer adds the MOSAIC entry from `examples/mainsail/navi.json` to that file, keeping any entries you already
   have. It opens the page in the same tab; change `"target"` to `"_blank"` for a new tab.
 - **The update panel.** An `[update_manager mosaic]` section in `moonraker.conf`, and `mosaic` in
   `moonraker.asvc` so Moonraker may restart the page after an update.
 
-Running `./install.sh` again is safe: every step checks what is already there. Reinstalling Mainsail (for
+Running `./install.sh` again is safe: every step checks what is already there. Reinstalling Mainsail or Fluidd (for
 instance with KIAUH) can replace its nginx site; run `./install.sh` again afterwards to put `/mosaic/` back.
 
-The sidebar entry is a Mainsail feature. Fluidd users can open `http://<printer>/mosaic/` directly.
+**Fluidd:** it has no counterpart to Mainsail's `navi.json`, so the installer skips the sidebar entry when Mainsail is
+  not installed. Open `http://<printer>/mosaic/` and bookmark it; the **← Dashboard** link at the top of the page goes
+  back. Everything else (macros, console, the update panel) works the same. The Fluidd path has been checked against
+  Fluidd's standard nginx site file only, not in a running Fluidd: if something does not work for you, please open an
+  issue with the output of `./install.sh`.
 
 ### Uninstalling
 
@@ -540,7 +545,7 @@ has not been run on a real Pi.
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
 right sign on a real printer needs the check described under "Sign convention". Waiting for temperatures
 (`WAIT=1`) cannot be checked in batch mode, fan speeds could not be read back, and the Mainsail sidebar entry was not tried
-in a real Mainsail. Nothing was tried on a real tool changer.
+in a real Mainsail, nor was anything tried in a real Fluidd. Nothing was tried on a real tool changer.
 
 The first run needs care: keep a hand near the emergency stop, start with `safe_z` generously high, check the Nudge
 and switch positions at low speed, and run `MOSAIC_Z_PROBE_ACCURACY` before you trust the Z values from a switch.

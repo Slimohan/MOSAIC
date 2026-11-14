@@ -3,7 +3,7 @@
 #   - the [include MOSAIC/mosaic.cfg] line in printer.cfg (a backup is kept)
 #   - the core link in your MOSAIC folder
 #   - the mosaic service (and mosaic-ui, its name in an earlier version)
-#   - the /mosaic/ include in Mainsail's nginx site (a backup is kept)
+#   - the /mosaic/ include in the nginx site of Mainsail and/or Fluidd (a backup is kept)
 #   - the MOSAIC entry in Mainsail's sidebar (.theme/navi.json)
 #   - [update_manager mosaic] in moonraker.conf and mosaic in moonraker.asvc (backups are kept)
 #   - the Z switch module links in Klipper and Kalico
@@ -46,20 +46,23 @@ else
 fi
 
 # --- nginx -----------------------------------------------------------------
-site="${NGINX_SITE:-/etc/nginx/sites-available/mainsail}"
-if [ -f "$site" ] && grep -q "nginx-mosaic.conf" "$site"; then
-    sudo cp "$site" "$site.mosaic-uninstall-$stamp"
-    sudo sed -i "/nginx-mosaic.conf/d" "$site"
-    if sudo nginx -t >/dev/null 2>&1; then
-        sudo systemctl reload nginx
-        echo "nginx: /mosaic/ removed from $site (backup: $site.mosaic-uninstall-$stamp)"
-    else
-        sudo cp "$site.mosaic-uninstall-$stamp" "$site"
-        echo "nginx: the check failed after removing /mosaic/, $site restored unchanged; remove the line with nginx-mosaic.conf by hand"
+sites="${NGINX_SITE:-/etc/nginx/sites-available/mainsail /etc/nginx/sites-available/fluidd}"
+removed=0
+for site in $sites; do
+    if [ -f "$site" ] && grep -q "nginx-mosaic.conf" "$site"; then
+        sudo cp "$site" "$site.mosaic-uninstall-$stamp"
+        sudo sed -i "/nginx-mosaic.conf/d" "$site"
+        if sudo nginx -t >/dev/null 2>&1; then
+            sudo systemctl reload nginx
+            echo "nginx: /mosaic/ removed from $site (backup: $site.mosaic-uninstall-$stamp)"
+        else
+            sudo cp "$site.mosaic-uninstall-$stamp" "$site"
+            echo "nginx: the check failed after removing /mosaic/, $site restored unchanged; remove the line with nginx-mosaic.conf by hand"
+        fi
+        removed=1
     fi
-else
-    echo "nginx: nothing to remove"
-fi
+done
+[ $removed -eq 1 ] || echo "nginx: nothing to remove"
 
 # --- sidebar entry ----------------------------------------------------------
 navi="$conf/.theme/navi.json"
