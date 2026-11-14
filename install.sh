@@ -7,14 +7,15 @@
 #      numbered files (00_core.cfg ...) is joined into mosaic.cfg.
 #   2. Links the optional Z switch module into Klipper and Kalico.
 #   3. Sets up the MOSAIC page: a service, the page at http://<printer>/mosaic/
-#      through Mainsail's web server, a MOSAIC entry in Mainsail's sidebar,
-#      and MOSAIC in Mainsail's update panel. Needs sudo for the service and nginx.
+#      through the web server of Mainsail and/or Fluidd, a MOSAIC entry in
+#      Mainsail's sidebar (Fluidd has none), and MOSAIC in the Moonraker update
+#      panel. Needs sudo for the service and nginx.
 #
 # Usage: ./install.sh [path to klipper or kalico, ...]   (default: ~/klipper ~/kalico)
 #   CONF=/path/to/config ./install.sh   if your config folder is not ~/printer_data/config
 #   COPY=1 ./install.sh                 to copy the module instead of symlinking it
 #   NO_WEB=1 ./install.sh               to skip step 3
-#   NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh   if Mainsail's site file has another name
+#   NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh   if your Mainsail or Fluidd site file has another name
 # Running it again is safe: every step checks what is already there.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
@@ -157,28 +158,45 @@ UNIT
         fi
     fi
 
-    # The page at /mosaic/ inside Mainsail's nginx site.
-    site="${NGINX_SITE:-/etc/nginx/sites-available/mainsail}"
-    if [ -f "$site" ]; then
-        if grep -q "nginx-mosaic.conf" "$site"; then
+    # The page at /mosaic/ inside the nginx site of Mainsail and/or Fluidd.
+    if [ -n "$NGINX_SITE" ]; then
+        sites="$NGINX_SITE"
+    else
+        sites=""
+        for name in mainsail fluidd; do
+            [ -f "/etc/nginx/sites-available/$name" ] && sites="$sites /etc/nginx/sites-available/$name"
+        done
+    fi
+    if [ -z "$sites" ]; then
+        echo "nginx: no Mainsail or Fluidd site found in /etc/nginx/sites-available, the page is only on this machine at port 8099 (set NGINX_SITE=/etc/nginx/sites-available/<name> and run again)"
+    fi
+    for site in $sites; do
+        if [ ! -f "$site" ]; then
+            echo "nginx: $site not found (set NGINX_SITE=... to the right file and run again)"
+        elif grep -q "nginx-mosaic.conf" "$site"; then
             echo "nginx: /mosaic/ already set up in $site"
         else
             sudo cp "$site" "$site.mosaic-backup"
             # insert the include as the first line inside the server block
             if sudo sed -i "0,/server[[:space:]]*{/s||&\n    include $here/ui/nginx-mosaic.conf;  # MOSAIC page|" "$site" && sudo nginx -t >/dev/null 2>&1; then
                 sudo systemctl reload nginx
-                echo "nginx: the page is at http://<printer>/mosaic/ (backup: $site.mosaic-backup)"
+                echo "nginx: the page is at http://<printer>/mosaic/ via $site (backup: $site.mosaic-backup)"
             else
                 sudo cp "$site.mosaic-backup" "$site"
                 echo "nginx: could not add /mosaic/, $site restored unchanged"
             fi
         fi
-    else
-        echo "nginx: $site not found, the page is only on this machine at port 8099 (set NGINX_SITE=... and run again)"
-    fi
+    done
 
     # The MOSAIC entry in Mainsail's sidebar (.theme/navi.json, merged with yours).
-    if [ -f "$conf/printer.cfg" ]; then
+    # Fluidd has no such feature; skipped when Mainsail is not installed.
+    mainsail=0
+    [ -d "$HOME/mainsail" ] && mainsail=1
+    case " $sites " in *mainsail*) mainsail=1 ;; esac
+    [ -n "$NGINX_SITE" ] && mainsail=1
+    if [ $mainsail -eq 0 ]; then
+        echo "sidebar: Mainsail not found, no sidebar entry (open http://<printer>/mosaic/ or bookmark it)"
+    elif [ -f "$conf/printer.cfg" ]; then
         mkdir -p "$conf/.theme"
         python3 - "$conf/.theme/navi.json" "$here/examples/mainsail/navi.json" <<'PY'
 import json, os, sys
@@ -226,7 +244,7 @@ CONF
 fi
 
 echo
-echo "Next: edit $dest/mosaic.cfg (in Mainsail: Machine > MOSAIC > mosaic.cfg), section by section."
+echo "Next: edit $dest/mosaic.cfg (Mainsail: Machine > MOSAIC > mosaic.cfg; Fluidd: Configuration > MOSAIC), section by section."
 echo "Move your [tool Tn], tool heater/fan and [toolchanger] sections from printer.cfg into it."
 echo "Then restart Klipper and run MOSAIC_CHECK."
-[ -z "$NO_WEB" ] && echo "MOSAIC page: reload Mainsail and click MOSAIC in the sidebar."
+[ -z "$NO_WEB" ] && echo "MOSAIC page: http://<printer>/mosaic/ (Mainsail: reload and click MOSAIC in the sidebar; Fluidd: bookmark the address)."
