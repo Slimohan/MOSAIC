@@ -328,7 +328,7 @@ of every tool, so you do not pick them by hand.
 - **Tools without a filament** are left out. Only the entries `T0` ... `T9` are MOSAIC's; other `lane_data` entries
   (from an MMU, for instance) are not touched. If you also edit filament slots in Mainsail, MOSAIC's values win for
   `T0` ... `T9`.
-- **Needs the page service** (`mosaic-ui`, set up by `install.sh`). Switch the sync off with
+- **Needs the page service** (`mosaic`, set up by `install.sh`). Switch the sync off with
   `variable_slicer_sync: False` in section 2 of `mosaic.cfg`; the entries already written then stay as they are.
 
 ### Temperature buttons
@@ -490,7 +490,7 @@ on a trusted network.
 
 ### What the installer sets up
 
-- **The service** `mosaic-ui` runs the page server (`ui/mosaic_server.py`) as your user. It listens only on the
+- **The service** `mosaic` runs the page server (`ui/mosaic_server.py`) as your user. It listens only on the
   printer itself (port 8099); you reach it through Mainsail's web server.
 - **The address `http://<printer>/mosaic/`.** The installer adds one `include` line for `ui/nginx-mosaic.conf` to
   Mainsail's nginx site (`/etc/nginx/sites-available/mainsail`), checks it with `nginx -t`, and puts the original
@@ -500,7 +500,7 @@ on a trusted network.
 - **The sidebar entry.** Mainsail reads extra sidebar entries from `.theme/navi.json` in the config folder. The
   installer adds the MOSAIC entry from `examples/mainsail/navi.json` to that file, keeping any entries you already
   have. It opens the page in the same tab; change `"target"` to `"_blank"` for a new tab.
-- **The update panel.** An `[update_manager mosaic]` section in `moonraker.conf`, and `mosaic-ui` in
+- **The update panel.** An `[update_manager mosaic]` section in `moonraker.conf`, and `mosaic` in
   `moonraker.asvc` so Moonraker may restart the page after an update.
 
 Running `./install.sh` again is safe: every step checks what is already there. Reinstalling Mainsail (for
@@ -516,8 +516,8 @@ it edits. Your MOSAIC folder stays, with your tools, settings and dock positions
 in `[save_variables]`. If you keep using the tool changer without MOSAIC, move your tools and `[toolchanger]` section
 back into `printer.cfg` (without the MOSAIC dock hooks) before restarting Klipper.
 
-**By hand, without the installer:** copy `ui/mosaic-ui.service` to `/etc/systemd/system/`, fix the user and the
-path inside, run `sudo systemctl enable --now mosaic-ui`, and open `http://<printer-address>:8099`.
+**By hand, without the installer:** copy `ui/mosaic.service` to `/etc/systemd/system/`, fix the user and the
+path inside, run `sudo systemctl enable --now mosaic`, and open `http://<printer-address>:8099`.
 
 ## What was tested, and what was not
 
