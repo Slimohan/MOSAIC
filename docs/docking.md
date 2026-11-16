@@ -114,7 +114,7 @@ Adjust with `MOSAIC_DOCK_SET T=2 PARK_X=101.2 PARK_Y=280.4` until it is right (v
 Two kinds of switch, both read as `[gcode_button]` so Klipper and Kalico treat them the same. Wire them so the button is **pressed when a tool is present** (put `!` in front of the pin if yours works the other way round).
 
 ```
-# In your own hardware file (see hardware.md), any names you like.
+# In your board file, or in section 6 of mosaic.cfg (see hardware.md). Any names you like.
 # One switch on the carriage: pressed while any tool is attached
 [gcode_button carriage_switch]
 pin: ^...
@@ -128,7 +128,7 @@ pin: ^...
 press_gcode:
 ```
 
-Then tell MOSAIC their names in section 6 of `MOSAIC/mosaic.cfg`:
+If you named them `mosaic_head` and `mosaic_dock_t0`, `mosaic_dock_t1` ... MOSAIC finds them by itself. With any other names, tell MOSAIC in section 6 of `MOSAIC/mosaic.cfg`:
 
 ```
 [gcode_macro _MOSAIC_TOOLS_SETTINGS]

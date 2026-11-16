@@ -1,32 +1,38 @@
-# Your hardware file
+# Your hardware
 
-MOSAIC works with any board. It contains no pins and no board names: the hardware of your tools lives in your own
-file, and MOSAIC only refers to it by name.
+MOSAIC works with any board. It contains no board of its own: the heaters, thermistors, fans, motors and switches of
+your tools are set up in sections 5 and 6 of `MOSAIC/mosaic.cfg`, and MOSAIC refers to them by name. You have two
+ways to set them up. Pick one per printer.
+
+**A. A file of your own.** A board file next to `printer.cfg` (from your tool changer, or one you write from the
+examples below), pulled in by one line in section 5 of `mosaic.cfg`:
 
 ```
-printer.cfg
-  [include my_tools.cfg]         your hardware: boards, heaters, thermistors, fans, motors, switches
-  [include MOSAIC/mosaic.cfg]    MOSAIC: [tool Tn] sections that point at those names
-
+MOSAIC/mosaic.cfg   section 5:   [include ../my_tools.cfg]
 my_tools.cfg                     yours, next to printer.cfg; MOSAIC never touches it
-MOSAIC/mosaic.cfg                section 5: [tool Tn]   section 6: the names of your switches
 ```
 
-Include your hardware file **before** `MOSAIC/mosaic.cfg`. The name of the file is up to you, and so are the names of
-the sections in it. One toolboard per tool, an expansion board for all tools, or everything on the mainboard: the
-`[tool Tn]` sections in MOSAIC look the same.
+The `../` is there because the include is relative to the `MOSAIC` folder. (Including the file in `printer.cfg`
+before `[include MOSAIC/mosaic.cfg]` works as well.) The name of the file is up to you, and so are the names of the
+sections in it.
+
+**B. Everything in `mosaic.cfg`.** The examples below are what you would put in sections 5 and 6 (Part 1 of each),
+without a separate file. The templates in the file are the same, with `...` where your pins go.
+
+Either way, one toolboard per tool, an expansion board for all tools, or everything on the mainboard: the
+`[tool Tn]` sections look the same.
 
 What goes where:
 
 | What | Where |
 |---|---|
-| `[mcu ...]` of the tool board(s) | your hardware file |
-| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | your hardware file |
-| `[extruder_stepper ...]` (a shared extruder motor) | your hardware file |
-| `[heater_fan ...]`, `[fan_generic ...]` | your hardware file |
-| `[gcode_button ...]` carriage and dock switches | your hardware file |
-| `[tool Tn]` | `MOSAIC/mosaic.cfg`, section 5 |
-| which switch is which | `MOSAIC/mosaic.cfg`, section 6 |
+| `[mcu ...]` of the tool board(s) | your board file (A), or in `printer.cfg` |
+| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | A: your board file. B: `mosaic.cfg`, section 5 Part 1 |
+| `[extruder_stepper ...]` (a shared extruder motor) | same |
+| `[heater_fan ...]`, `[fan_generic ...]` | same |
+| `[gcode_button ...]` carriage and dock switches | A: your board file. B: `mosaic.cfg`, section 6 Part 1 |
+| `[tool Tn]` | `MOSAIC/mosaic.cfg`, section 5 Part 2 |
+| which switch is which (only if not named `mosaic_head`, `mosaic_dock_t<n>`) | `MOSAIC/mosaic.cfg`, section 6 Part 2 |
 | `[toolchanger]` | `MOSAIC/mosaic.cfg`, section 4 |
 | Nudge probe and Z switch | `MOSAIC/mosaic.cfg`, section 3 (MOSAIC's own equipment) |
 
