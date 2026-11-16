@@ -62,7 +62,7 @@ Add `v` as the fifth field of the pickup step where the carriage switch should a
 variable_pickup_out: "0,0,12,6,v/0,-25,12"
 ```
 
-If the switch does not show the tool there, the change stops with an error before the carriage drags anything away. Without a carriage switch (`mosaic_head`) it falls back to klipper-toolchanger's `VERIFY_TOOL_DETECTED`, which does nothing when the tools have no detection pin.
+If the switch does not show the tool there, the change stops with an error before the carriage drags anything away. Without a carriage switch it falls back to klipper-toolchanger's `VERIFY_TOOL_DETECTED`, which does nothing when the tools have no detection pin.
 
 ## 7. Different path for one dock only
 

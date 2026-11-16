@@ -114,20 +114,30 @@ Adjust with `MOSAIC_DOCK_SET T=2 PARK_X=101.2 PARK_Y=280.4` until it is right (v
 Two kinds of switch, both read as `[gcode_button]` so Klipper and Kalico treat them the same. Wire them so the button is **pressed when a tool is present** (put `!` in front of the pin if yours works the other way round).
 
 ```
+# In your own hardware file (see hardware.md), any names you like.
 # One switch on the carriage: pressed while any tool is attached
-[gcode_button mosaic_head]
-pin: ^PA1
+[gcode_button carriage_switch]
+pin: ^...
 press_gcode:
 release_gcode:
     MOSAIC_DOCK_HEAD_RELEASED
 
 # One switch per dock: pressed while that tool sits in its dock
-[gcode_button mosaic_dock_t0]
-pin: ^PA2
+[gcode_button dock_0]
+pin: ^...
 press_gcode:
 ```
 
-The names are fixed: `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`. A switch that does not exist is skipped, so you can start with only some of them. Ready-made sections are in section 6 of `MOSAIC/mosaic.cfg`.
+Then tell MOSAIC their names in section 6 of `MOSAIC/mosaic.cfg`:
+
+```
+[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+variable_head_switch: 'carriage_switch'
+# in tool order T0, T1, T2 ...; an empty entry = no dock switch for that tool
+variable_dock_switches: 'dock_0, dock_1, dock_2'
+```
+
+Without names there MOSAIC looks for `mosaic_head` and `mosaic_dock_t0` … `mosaic_dock_t9`, so switches set up for an older version keep working. A switch that does not exist is skipped, so you can start with only some of them. `MOSAIC_DOCK_SWITCHES` prints every switch under the name MOSAIC looks for.
 
 **At the dock** (what these macros do, with `check_switches: 1`):
 
