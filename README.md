@@ -54,8 +54,8 @@ made-up demo data, not a real machine.
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
-| `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools, switch names, dock positions. No pins of your tools: those stay in your own file. `install.sh` copies it once. |
-| `docs/` | Your hardware file (examples), the docking guide, and examples of dock layouts. |
+| `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools and their hardware, switches, dock positions. `install.sh` copies it once. |
+| `docs/` | Hardware examples, the docking guide, and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail or Fluidd. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
@@ -147,30 +147,31 @@ MOSAIC/
 2. **Settings**: at least the Nudge position
 3. **MOSAIC's probes**: the Nudge probe, the optional Z switch, `[save_variables]`
 4. **Toolchanger**: the `[toolchanger]` section with the dock hooks
-5. **Tools**: one `[tool Tn]` per tool, pointing at your hardware by name
-6. **Switches**: the names of your carriage and dock switches (optional)
+5. **Tools**: the hardware of your tools (heaters, fans, motor) and one `[tool Tn]` per tool
+6. **Switches**: your carriage and dock switches, or just their names if they live in your board file (optional)
 7. **Dock positions**: where every dock is ([docs/docking.md](docs/docking.md))
 
 The order matters: MOSAIC's T commands have to load before the tools, and your settings after MOSAIC. Move your
 `[tool Tn]` sections and your `[toolchanger]` options from `printer.cfg` into sections 5 and 4. Each section explains
 what goes into it, and Klipper refuses to start while a section you switched on still has `...` in it.
 
-**Your hardware lives in your own file.** MOSAIC works with any board and holds no pins. The boards, heaters,
-thermistors, fans, motors and switches of your tools go in a file of your own next to `printer.cfg` (or stay in
-`printer.cfg`), included **before** MOSAIC:
+**Your hardware: two ways, both in `mosaic.cfg`.** MOSAIC works with any board and holds no board of its own. The
+heaters, thermistors, fans, motors and switches of your tools are set up in sections 5 and 6, and which way you pick
+is up to you:
 
-```
-[include my_tools.cfg]
-[include MOSAIC/mosaic.cfg]
-```
+- **A. Point at a file of your own.** Your board or toolhead has a config file (the one that came with your tool
+  changer, say). Put it next to `printer.cfg` and add one line in section 5:
+  `[include ../my_tools.cfg]`. Its sections can have any names; the `[tool Tn]` sections and, in section 6, the
+  switch names refer to them. Changing boards means changing that file, never MOSAIC.
+- **B. Define them in `mosaic.cfg`.** Section 5 has ready-made templates for the heaters and fans (a full toolhead
+  per tool, or a hotend swapper with one shared extruder motor) and section 6 for the switches. Remove the hash
+  signs and fill in your pins.
 
-The `[tool Tn]` sections in section 5 then point at them by name (`extruder: extruder1`), and section 6 says which
-`[gcode_button]` is the carriage switch and which are the dock switches. Changing boards means changing your own file,
-never MOSAIC. Examples: [docs/hardware.md](docs/hardware.md). Only `mosaic.cfg` is loaded from the `MOSAIC` folder,
-so leftover copies and old files there do no harm.
+Examples, including complete board files: [docs/hardware.md](docs/hardware.md). Only `mosaic.cfg` is loaded from the
+`MOSAIC` folder, so leftover copies and old files there do no harm.
 
-**Taking a tool out:** put a hash sign in front of its `[tool Tn]` section in section 5. Its saved offsets and
-filament stay saved. Its hardware in your own file can stay as it is.
+**Taking a tool out:** put a hash sign in front of its `[tool Tn]` section in section 5 (and, if you defined it
+there, its heater and fans, and its dock switch in section 6). Its saved offsets and filament stay saved.
 
 **Updates** never touch `mosaic.cfg`. If the template changes, the new one is saved beside yours as `mosaic.cfg.new`,
 so you can see what is new and copy it over.
