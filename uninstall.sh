@@ -20,7 +20,10 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 conf="${CONF:-$HOME/printer_data/config}"
+conf="${conf%/}"
 stamp=$(date +%Y%m%d-%H%M%S)
+. "$here/instance.sh"
+[ -n "$inst" ] && echo "instance $inst: removing MOSAIC service $name"
 
 # --- printer.cfg and the core link -----------------------------------------
 if [ -f "$conf/printer.cfg" ] && grep -qE "^\[include MOSAIC/(mosaic|\*)\.cfg\]" "$conf/printer.cfg"; then
@@ -34,13 +37,15 @@ if [ -L "$conf/MOSAIC/core" ]; then
 fi
 
 # --- the service ------------------------------------------------------------
-if [ -f /etc/systemd/system/mosaic.service ] || [ -f /etc/systemd/system/mosaic-ui.service ]; then
-    for svc in mosaic mosaic-ui; do
-        sudo systemctl disable --now $svc >/dev/null 2>&1 || true
-        sudo rm -f /etc/systemd/system/$svc.service
+if [ -f "/etc/systemd/system/$name.service" ] || { [ -z "$inst" ] && [ -f /etc/systemd/system/mosaic-ui.service ]; }; then
+    svcs="$name"
+    [ -z "$inst" ] && svcs="mosaic mosaic-ui"
+    for svc in $svcs; do
+        sudo systemctl disable --now "$svc" >/dev/null 2>&1 || true
+        sudo rm -f "/etc/systemd/system/$svc.service"
     done
     sudo systemctl daemon-reload
-    echo "service mosaic removed"
+    echo "service $name removed"
 else
     echo "service: not installed"
 fi
@@ -48,20 +53,24 @@ fi
 # --- nginx -----------------------------------------------------------------
 sites="${NGINX_SITE:-/etc/nginx/sites-available/mainsail /etc/nginx/sites-available/fluidd}"
 removed=0
+if [ -z "$inst" ]; then snippet="nginx-mosaic.conf"; else snippet="/etc/nginx/mosaic/$name.conf"; fi
 for site in $sites; do
-    if [ -f "$site" ] && grep -q "nginx-mosaic.conf" "$site"; then
+    if [ -f "$site" ] && grep -qF "$snippet" "$site"; then
         sudo cp "$site" "$site.mosaic-uninstall-$stamp"
-        sudo sed -i "/nginx-mosaic.conf/d" "$site"
+        sudo sed -i "\|$snippet|d" "$site"
         if sudo nginx -t >/dev/null 2>&1; then
             sudo systemctl reload nginx
-            echo "nginx: /mosaic/ removed from $site (backup: $site.mosaic-uninstall-$stamp)"
+            echo "nginx: /$name/ removed from $site (backup: $site.mosaic-uninstall-$stamp)"
         else
             sudo cp "$site.mosaic-uninstall-$stamp" "$site"
-            echo "nginx: the check failed after removing /mosaic/, $site restored unchanged; remove the line with nginx-mosaic.conf by hand"
+            echo "nginx: the check failed after removing /$name/, $site restored unchanged; remove the line with $snippet by hand"
         fi
         removed=1
     fi
 done
+if [ -n "$inst" ] && [ -f "/etc/nginx/mosaic/$name.conf" ]; then
+    sudo rm -f "/etc/nginx/mosaic/$name.conf"
+fi
 [ $removed -eq 1 ] || echo "nginx: nothing to remove"
 
 # --- sidebar entry ----------------------------------------------------------
@@ -86,14 +95,14 @@ fi
 
 # --- update panel ------------------------------------------------------------
 mconf="$conf/moonraker.conf"
-if [ -f "$mconf" ] && grep -q "^\[update_manager mosaic\]" "$mconf"; then
+if [ -f "$mconf" ] && grep -q "^\[update_manager $name\]" "$mconf"; then
     cp "$mconf" "$mconf.mosaic-uninstall-$stamp"
-    python3 - "$mconf" <<'PY'
+    python3 - "$mconf" "[update_manager $name]" <<'PY'
 import sys
-path = sys.argv[1]
+path, header = sys.argv[1], sys.argv[2]
 out, skip = [], False
 for line in open(path).read().splitlines(True):
-    if line.strip() == "[update_manager mosaic]":
+    if line.strip() == header:
         skip = True
         while out and not out[-1].strip():
             out.pop()
@@ -105,13 +114,13 @@ for line in open(path).read().splitlines(True):
         out.append(line)
 open(path, "w").write("".join(out).rstrip("\n") + "\n")
 PY
-    echo "update panel: [update_manager mosaic] removed (backup: $mconf.mosaic-uninstall-$stamp)"
-    sudo systemctl restart moonraker 2>/dev/null || true
+    echo "update panel: [update_manager $name] removed (backup: $mconf.mosaic-uninstall-$stamp)"
+    sudo systemctl restart "$msvc" 2>/dev/null || true
 fi
 asvc="$(dirname "$conf")/moonraker.asvc"
-if [ -f "$asvc" ] && grep -qxE "mosaic|mosaic-ui" "$asvc"; then
-    sed -i -E "/^(mosaic|mosaic-ui)$/d" "$asvc"
-    echo "removed mosaic from $asvc"
+if [ -f "$asvc" ] && grep -qxE "$name|mosaic-ui" "$asvc"; then
+    sed -i -E "/^($name|mosaic-ui)$/d" "$asvc"
+    echo "removed $name from $asvc"
 fi
 
 # --- Z switch module ---------------------------------------------------------
