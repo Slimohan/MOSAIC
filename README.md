@@ -54,8 +54,8 @@ made-up demo data, not a real machine.
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
-| `config/` | Templates for your MOSAIC folder: tools, hardware, dock positions, switches, settings. `install.sh` copies them once. |
-| `docs/` | The docking guide and examples of dock layouts. |
+| `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools, switch names, dock positions. No pins of your tools: those stay in your own file. `install.sh` copies it once. |
+| `docs/` | Your hardware file (examples), the docking guide, and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail or Fluidd. |
 | `assets/` | The logo, the hexagon emblem alone, and a 1280x640 social preview image (PNG). |
@@ -145,23 +145,32 @@ MOSAIC/
 
 1. **What to load**: MOSAIC itself; switch optional parts on or off here
 2. **Settings**: at least the Nudge position
-3. **Hardware**: the Nudge probe, the optional Z switch, `[save_variables]`
+3. **MOSAIC's probes**: the Nudge probe, the optional Z switch, `[save_variables]`
 4. **Toolchanger**: the `[toolchanger]` section with the dock hooks
-5. **Tools**: every tool with its `[tool Tn]`, heater, thermistor and fans
-6. **Switches**: carriage and dock switches (optional)
+5. **Tools**: one `[tool Tn]` per tool, pointing at your hardware by name
+6. **Switches**: the names of your carriage and dock switches (optional)
 7. **Dock positions**: where every dock is ([docs/docking.md](docs/docking.md))
 
 The order matters: MOSAIC's T commands have to load before the tools, and your settings after MOSAIC. Move your
-`[tool Tn]` sections, the heaters and fans of the tools, and your `[toolchanger]` options from `printer.cfg` into
-sections 5 and 4. Each section explains what goes into it, and Klipper refuses to start while a section you switched
-on still has `...` in it.
+`[tool Tn]` sections and your `[toolchanger]` options from `printer.cfg` into sections 5 and 4. Each section explains
+what goes into it, and Klipper refuses to start while a section you switched on still has `...` in it.
 
-**Your own files** (a toolboard, say) can stay where they are, or go into the `MOSAIC` folder with an `[include]` line
-of their own at the end of `mosaic.cfg`. Only `mosaic.cfg` is loaded from that folder, so leftover copies and old
-files there do no harm.
+**Your hardware lives in your own file.** MOSAIC works with any board and holds no pins. The boards, heaters,
+thermistors, fans, motors and switches of your tools go in a file of your own next to `printer.cfg` (or stay in
+`printer.cfg`), included **before** MOSAIC:
 
-**Taking a tool out:** put a hash sign in front of its block in section 5 and of its dock switch in section 6. Its
-saved offsets and filament stay saved.
+```
+[include my_tools.cfg]
+[include MOSAIC/mosaic.cfg]
+```
+
+The `[tool Tn]` sections in section 5 then point at them by name (`extruder: extruder1`), and section 6 says which
+`[gcode_button]` is the carriage switch and which are the dock switches. Changing boards means changing your own file,
+never MOSAIC. Examples: [docs/hardware.md](docs/hardware.md). Only `mosaic.cfg` is loaded from the `MOSAIC` folder,
+so leftover copies and old files there do no harm.
+
+**Taking a tool out:** put a hash sign in front of its `[tool Tn]` section in section 5. Its saved offsets and
+filament stay saved. Its hardware in your own file can stay as it is.
 
 **Updates** never touch `mosaic.cfg`. If the template changes, the new one is saved beside yours as `mosaic.cfg.new`,
 so you can see what is new and copy it over.
@@ -379,7 +388,7 @@ tools (see "Filament per tool").
 ### Tool change log
 
 The `T0` ... `T9` commands time every tool change, including the wait for the temperature in standby mode, and
-check it: afterwards the tool must be the mounted one and, if you have a carriage switch (`mosaic_head`), the switch
+check it: afterwards the tool must be the mounted one and, if you have a carriage switch, the switch
 must see a tool. A change that stopped with an error is counted as failed at the next change. `MOSAIC_TOOL_LOG`
 prints the last 20 changes, the page shows the last 10 with the number of changes, failures and the average time. The
 log lives in memory and starts empty after a Klipper restart. Changes made with `SELECT_TOOL` directly (the
