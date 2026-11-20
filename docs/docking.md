@@ -76,6 +76,7 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
 | `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part. `lift`: up to `safe_z` when lower before the dock moves, back to the print Z after, the dock steps have no Z. `keep` and `lift` are for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `lift_min` | `z_mode: lift` only: go at least this many mm above the print Z before the dock moves (default 0 = only `safe_z`). |
 | `travel_accel` | Acceleration of the lift to `safe_z` and of the way back to the print: `fast` (default, `accel_fast`), `slow`, `print` (the acceleration the print had) or mm/s². |
 | `prime_before_restore` | `1` = after a pickup that is followed by a first prime (`first_prime` with a `prime_macro`), the way back to the print waits until after the prime, so the `prime_macro` goes from the dock straight to its brush. It can call `MOSAIC_DOCK_RESTORE_PENDING` when it is done at the brush (before it pushes the retract back); otherwise MOSAIC goes back after the prime. `0` (default) = back to the print first. |
 | `lane_guard` | `1` = a carriage that is between the first entry step and the docks goes straight out to the line of that step first, then sideways. For `keep` / `lift`, where the paths are the only clearance. `0` (default) = straight to the first step. |
@@ -206,6 +207,8 @@ variable_z_mode: 'lift'
 ```
 
 instead. Before the dock moves Z goes up to `safe_z` when it is lower (the bed goes down; above `safe_z` nothing moves), the dock steps have no Z part, and at the end Z goes back to the print Z after X and Y, the same order as on a toolhead-Z printer. As with `keep`, `park_z` and `dz` are not used and `MOSAIC_DOCK_TEACH` stores no `park_z`; `safe_z` is range-checked. After a failed check the carriage is lifted to `safe_z` slowly, like with `absolute`.
+
+Above `safe_z` (high layers) `lift` does not move Z, so the way back to the print comes in sideways at the print Z (plus the slicer's Z hop). On a prime tower that is where the nozzle may meet what is left on its edge. `variable_lift_min: 2` lifts at least 2 mm above the print Z before the dock moves (taken from the Z the change goes back to, so a drop-off followed by a pickup lifts once), and the way back then comes in 2 mm above the print and goes down straight.
 
 Two more settings help on such printers, both off by default:
 
