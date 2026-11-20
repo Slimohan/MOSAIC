@@ -122,7 +122,7 @@ if [ ! -e "$dest/mosaic.cfg" ]; then
     fi
     if [ -z "$tools" ]; then
         if [ -t 0 ]; then
-            ask_number "How many tools are you using? 1-8" 1 8 || reply=10
+            ask_number "How many tools are you using? 1-10" 1 10 || reply=10
             tools=$reply
         else
             tools=10

@@ -116,7 +116,7 @@ It asks two questions first (only on a new install; it never asks again, and nev
 
 ```
 Which calibration method do you prefer, Nudge or Visual? 1 for Nudge 2 for Camera
-How many tools are you using? 1-8
+How many tools are you using? 1-10
 ```
 
 The answers decide what your `mosaic.cfg` looks like. The method you pick is switched on; the other one is in the file
