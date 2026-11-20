@@ -204,7 +204,7 @@ Then:
 
 `MOSAIC_CHECK` tells you which of these applies, and warns about the include next to the client macros. The refusal is an error from a console command only, so it does not end the paused print.
 
-**Start macros.** A macro that called the `T` command (your `PRINT_START`) keeps running after the pause. Put `MOSAIC_REQUIRE_TOOL T=<n>` right after the change: it raises an error when the change failed, which stops the start cleanly before the first layer. Then `CANCEL_PRINT`, fix the tool, `MOSAIC_RESUME RESUME=0`.
+**Start macros.** A macro that called the `T` command (your `PRINT_START`) keeps running after the pause. Put `MOSAIC_REQUIRE_TOOL T=<n>` right after the change: it raises an error when the change failed, which stops the start cleanly before the first layer. Then `CANCEL_PRINT`, fix the tool, `MOSAIC_RESUME RESUME=0`. Until that runs, every `T` command stays refused and the acceleration stays low after a cancel too: `CANCEL_PRINT` does not clear the failure, only `MOSAIC_RESUME` does.
 
 This needs `[pause_resume]` in `printer.cfg` and `variable_pause_on_error: True` (the default). Set `error_gcode: MOSAIC_TOOLCHANGE_ERROR` in `[toolchanger]` (the template does) so the failures that klipper-toolchanger finds itself are reported the same way. Honest limits:
 
