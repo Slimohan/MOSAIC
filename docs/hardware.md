@@ -252,13 +252,27 @@ your own), leave `variable_motor` empty and MOSAIC does nothing with the extrude
   for the tool's heater to reach its target (`prime_wait`); with the heater off nothing is pushed and the retract stays
   pending, a later `MOSAIC_PRIME` (a print start can call it after heating the tool) does it. Set the slicer's tool change retraction to 0, or the filament is
   pulled twice.
-- **Print start and end.** In `PRINT_START`, heat and mount the first tool with `T<n>` as always. At the end, `MOSAIC_TOOLS_OFF`
-  turns every heater off. The print start should look at `printer.toolchanger.status` after its tool change: when a
-  change failed the print is paused (see docking.md, "When a change fails during a print") but a macro that is already running
-  carries on to its end.
-- **Pending retracts are not saved.** A restart of Klipper forgets which tools are retracted, so a tool may come
-  back with its filament 1.5 mm short. Push it forward by hand when you see it: `MOSAIC_PRIME T=<n> FORCE=1` does
-  it only if MOSAIC still knows about a retract, otherwise use a plain `G1 E` with the tool hot.
+- **Print start and end.** In `PRINT_START`, heat and mount the first tool with `T<n>` as always, then call
+  `MOSAIC_REQUIRE_TOOL T=<n>`: when the change failed the print is paused (see docking.md, "When a change fails during a
+  print"), but a macro that is already running carries on, and this stops it with an error. If the first tool is already on
+  the carriage no change happens and nothing is primed: call `MOSAIC_PRIME T=<n>` yourself after heating it. At the end of the
+  print `MOSAIC_TOOLS_OFF RETRACT=1` pulls the filament of the mounted tool back and switches every heater off. The
+  tools in their docks were retracted when they were put away.
+- **Pending retracts are saved.** Which tool is retracted by how much is written to `[save_variables]`
+  (`t<N>_retracted`) and read back when Klipper starts, so a restart or a cancelled print does not lose it. The next
+  time the tool is mounted in a print it is pushed forward. Outside a print: `MOSAIC_PRIME T=<n> FORCE=1`. It costs
+  two small writes of the variables file per tool change.
+- **Prime over a brush, and the first prime.** `MOSAIC_PRIME` pushes the filament back where the nozzle is, which after
+  a change is on the print (the changer has already moved there). Where that is not wanted, set `variable_prime_macro` to a
+  macro of yours: it is called as `MY_MACRO T=<tool> LENGTH=<mm> SPEED=<mm/s>` once the tool is hot, and has to move to
+  the brush or bucket, push `LENGTH` mm, wipe and come back. It runs inside the change, so klipper-toolchanger moves to
+  the print position afterwards by itself. With it, `variable_first_prime` adds that many mm the first time each
+  tool is used in a print (a nozzle that has been standing empty puts down a tower with nothing in it). Call
+  `MOSAIC_PRIMED_RESET` at the start of `PRINT_START` so every print starts the list again. `MOSAIC_CHECK` tells you
+  if the macro does not exist.
+- **M109 wait.** With `mosaic_tool_heaters.cfg`, `variable_wait_below` / `variable_wait_above` make `M109 T.. S..` wait
+  for a window around the target (the usual `TEMPERATURE_WAIT`) instead of Klipper's slower "flat for a few seconds" wait,
+  which matters when every tool change waits for the temperature.
 
 ## Switches
 
