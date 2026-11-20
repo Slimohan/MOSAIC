@@ -76,6 +76,8 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
 | `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part. `lift`: up to `safe_z` when lower before the dock moves, back to the print Z after, the dock steps have no Z. `keep` and `lift` are for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `travel_accel` | Acceleration of the lift to `safe_z` and of the way back to the print: `fast` (default, `accel_fast`), `slow`, `print` (the acceleration the print had) or mm/s². |
+| `prime_before_restore` | `1` = after a pickup that is followed by a first prime (`first_prime` with a `prime_macro`), the way back to the print waits until after the prime, so the `prime_macro` goes from the dock straight to its brush. It can call `MOSAIC_DOCK_RESTORE_PENDING` when it is done at the brush (before it pushes the retract back); otherwise MOSAIC goes back after the prime. `0` (default) = back to the print first. |
 | `lane_guard` | `1` = a carriage that is between the first entry step and the docks goes straight out to the line of that step first, then sideways. For `keep` / `lift`, where the paths are the only clearance. `0` (default) = straight to the first step. |
 | `approach` | Default entry path for all docks, see [Paths](#paths) |
 | `pickup_in`, `dropoff_in` | Own entry path for a pickup and for a drop-off. Empty means: use `approach`. |
@@ -172,7 +174,7 @@ dx,dy,dz[,speed[,v[,accel]]]
 ```
 
 - `speed` in mm/s, empty = the default for that kind of move.
-- `accel` in mm/s², or `fast` / `slow` (the `accel_fast` / `accel_slow` settings). Empty = `fast` on the approach and `slow` on the way out of the dock. It needs `accel_fast` / `accel_slow` to be set, or a number.
+- `accel` in mm/s², or `fast` / `slow` (the `accel_fast` / `accel_slow` settings), or `print` (the acceleration the print had). Empty = `fast` on the approach and `slow` on the way out of the dock. It needs `accel_fast` / `accel_slow` to be set, or a number.
 - `v` in a pickup exit path: check right after that step that the carriage switch shows a tool. Without a carriage switch it runs `VERIFY_TOOL_DETECTED` instead, which does nothing when the tools have no detection pin.
 - The last move of an entry path goes to the dock position itself, you do not write it.
 - The **first entry step must be in free space** where the carriage can come down from `safe_z` (with `z_mode: keep`: where it can travel to from the print).
