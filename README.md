@@ -172,6 +172,27 @@ is up to you:
 Examples, including complete board files: [docs/hardware.md](docs/hardware.md). Only `mosaic.cfg` is loaded from the
 `MOSAIC` folder, so leftover copies and old files there do no harm.
 
+**How many T commands (Mainsail's tool buttons):** section 1 loads `core/mosaic_tools.cfg`, which brings all ten tool
+commands `T0` ... `T9`. Mainsail shows a button for every T command, so with fewer tools change that one line into
+two, with the range of your tools:
+
+```
+#[include core/mosaic_tools.cfg]
+[include core/mosaic_tools_core.cfg]
+[include core/t_commands/T[0-4].cfg]
+```
+
+| Tools | Second line |
+|---|---|
+| T0, T1 | `[include core/t_commands/T[0-1].cfg]` |
+| T0 ... T2 | `[include core/t_commands/T[0-2].cfg]` |
+| T0 ... T4 | `[include core/t_commands/T[0-4].cfg]` |
+| T0 ... T9 | `[include core/t_commands/T*.cfg]` (the same as the old line) |
+| other numbers, e.g. T0, T1, T5 | one line each: `[include core/t_commands/T0.cfg]`, `.../T1.cfg`, `.../T5.cfg` |
+
+Both lines stay above section 5: the T commands must load before the tools. `MOSAIC_CHECK` lists T commands without a
+tool, and fails if a tool has no MOSAIC T command. When you add a tool later, widen the range.
+
 **Taking a tool out:** put a hash sign in front of its `[tool Tn]` section in section 5 (and, if you defined it
 there, its heater and fans, and its dock switch in section 6). Its saved offsets and filament stay saved.
 
@@ -374,6 +395,12 @@ saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is
 MOSAIC runs `SET_ACTIVE_SPOOL ID=<id>`, which is what Moonraker's Spoolman component provides, so the filament used
 is booked to the right spool after every change. Without Moonraker's `[spoolman]` the command does not exist and
 nothing happens. `variable_spoolman: False` in section 2 turns it off.
+
+With a spool set, the page shows the tool's filament as Spoolman has it: the hotend drawn in the spool's colour, its
+material, vendor and name, and the weight left; the print temperature of the filament becomes a temperature button
+when the tool has none of its own. The OrcaSlicer sync sends the same colour and material. The page server reads the
+spool through Moonraker's `[spoolman]` component (only reading one spool at a time, refreshed every 30 s); the values
+you set with `MOSAIC_SET_FILAMENT` are used when a tool has no spool or Spoolman cannot be reached.
 
 **Mainsail's Spoolman panel.** Mainsail can keep one spool per tool: for every `T<n>` macro with a `spool_id` variable it
 shows the spool and lets you change it (it saves it as `t<n>__spool_id`). The MOSAIC T commands have that variable, and

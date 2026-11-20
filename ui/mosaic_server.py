@@ -16,6 +16,12 @@
 # Switch it off with variable_slicer_sync: False in _MOSAIC_TOOLS_SETTINGS,
 # or with --no-slicer-sync.
 #
+# Spoolman: a tool whose filament has a spool id (SPOOL=, or the Spoolman panel
+# of Mainsail) takes colour, material and name from that spool, on the page
+# (GET /spool?ids=1,2) and in the slicer sync. Read through Moonraker's
+# [spoolman] component (/server/spoolman/proxy, GET /v1/spool/<id> only),
+# kept 30 s. Without Spoolman nothing changes.
+#
 # Part of MOSAIC (github.com/Slimohan/MOSAIC), GPL-3.0.
 
 import argparse
@@ -38,6 +44,51 @@ ALLOWED = (
     "/server/files/metadata",
     "/server/files/list",
 )
+
+
+# ---------------------------------------------------------------- Spoolman
+SPOOL_TTL = 30.0
+_spools = {}            # spool id -> (time read, info or None)
+_spool_lock = threading.Lock()
+
+
+def _hex6(v):
+    v = str(v or "").split(",")[0].strip().lstrip("#").upper()
+    return v[:6] if len(v) >= 6 and all(c in "0123456789ABCDEF" for c in v[:6]) else ""
+
+
+def spool_info(moonraker, sid):
+    """Colour, material, name ... of Spoolman spool `sid`, or None (no Spoolman,
+    no such spool). Cached SPOOL_TTL seconds, a failure too."""
+    sid = int(sid)
+    now = time.time()
+    with _spool_lock:
+        c = _spools.get(sid)
+        if c and now - c[0] < SPOOL_TTL:
+            return c[1]
+    info = None
+    try:
+        r = _call(moonraker, "POST", "/server/spoolman/proxy",
+                  {"request_method": "GET", "path": "/v1/spool/%d" % sid}, timeout=5).get("result") or {}
+        if isinstance(r, dict) and "response" in r and ("error" in r or len(r) <= 2):
+            r = r.get("response") or {}           # Moonraker with use_v2_response
+        fil = r.get("filament") or {}
+        if r.get("id") is not None:
+            temp = fil.get("settings_extruder_temp")
+            info = {
+                "id": sid,
+                "color": _hex6(fil.get("color_hex") or fil.get("multi_color_hexes")),
+                "material": str(fil.get("material") or ""),
+                "name": str(fil.get("name") or ""),
+                "vendor": str((fil.get("vendor") or {}).get("name") or ""),
+                "remaining_weight": r.get("remaining_weight"),
+                "temp": float(temp) if isinstance(temp, (int, float)) else 0.0,
+            }
+    except Exception:
+        info = None
+    with _spool_lock:
+        _spools[sid] = (now, info)
+    return info
 
 
 def make_handler(moonraker):
@@ -77,9 +128,21 @@ def make_handler(moonraker):
                 msg = str(e).replace('"', "'")
                 return self._send(502, ('{"error":"%s"}' % msg).encode())
 
+        def _spools(self):
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            ids = []
+            for part in ",".join(q.get("ids", [])).split(","):
+                part = part.strip()
+                if part.isdigit() and 0 < int(part) <= 999999 and int(part) not in ids:
+                    ids.append(int(part))
+            out = {str(i): spool_info(moonraker, i) for i in ids[:10]}
+            return self._send(200, json.dumps(out).encode())
+
         def do_GET(self):
             if self.path.startswith("/moonraker/"):
                 return self._proxy("GET")
+            if self.path == "/spool" or self.path.startswith("/spool?"):
+                return self._spools()
             if self.path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
@@ -107,9 +170,33 @@ def _call(moonraker, method, path, body=None, timeout=10):
         return json.loads(r.read() or b"{}")
 
 
-def lane_entries(status):
+def with_spool(f, spool):
+    """The filament of a tool with the values of its Spoolman spool on top."""
+    if not isinstance(f, dict):
+        return f
+    try:
+        sid = int(f.get("spool_id") or 0)
+    except (TypeError, ValueError):
+        sid = 0
+    s = spool(sid) if sid > 0 else None
+    if not s:
+        return f
+    g = dict(f)
+    for k in ("color", "material"):
+        if s.get(k):
+            g[k] = s[k]
+    name = " ".join(x for x in (s.get("vendor"), s.get("name")) if x)
+    if name:
+        g["name"] = name
+    if not float(g.get("temp") or 0) and s.get("temp"):
+        g["temp"] = s["temp"]
+    return g
+
+
+def lane_entries(status, spool=lambda sid: None):
     """The lane_data entries MOSAIC wants, from a printer status answer.
-    None means: do not touch lane_data (sync off, or no tool changer yet)."""
+    None means: do not touch lane_data (sync off, or no tool changer yet).
+    spool(id) gives the Spoolman values of a spool (None without Spoolman)."""
     tc = status.get("toolchanger")
     settings = status.get("gcode_macro _MOSAIC_TOOLS_SETTINGS") or {}
     if not tc or str(settings.get("slicer_sync", True)).lower() in ("false", "0", "no"):
@@ -119,7 +206,7 @@ def lane_entries(status):
     for n in tc.get("tool_numbers") or []:
         if not 0 <= int(n) <= 9:
             continue
-        f = variables.get("t%d_filament" % n)
+        f = with_spool(variables.get("t%d_filament" % n), spool)
         if not isinstance(f, dict) or not (f.get("material") or f.get("color")):
             continue
         e = {"lane": str(n), "material": str(f.get("material") or "")}
@@ -142,7 +229,7 @@ def sync_once(moonraker, last):
     `last` is what this process wrote before; returns the new state."""
     q = "/printer/objects/query?toolchanger&save_variables&gcode_macro%20_MOSAIC_TOOLS_SETTINGS"
     status = _call(moonraker, "GET", q)["result"]["status"]
-    want = lane_entries(status)
+    want = lane_entries(status, lambda sid: spool_info(moonraker, sid))
     if want is None:
         return last
     try:

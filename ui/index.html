@@ -59,9 +59,10 @@
   .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .note { color:var(--mute); font-size:13px; }
   ol { margin:0; padding-left:20px; color:var(--mute); font-size:13px; }
-  .fil { display:flex; gap:10px; align-items:center; }
+  .fil { display:flex; gap:10px; align-items:center; min-width:0; }
   .fil svg { width:34px; height:46px; flex:none; }
-  .fil .ftxt { min-width:0; flex:1; }
+  .fil .ftxt { min-width:0; flex:1; overflow:hidden; }
+  .fil button { flex:none; }
   .fil .fmat { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .fil .fname { font-size:12px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sw { display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid var(--line); vertical-align:-1px; margin-right:5px; }
@@ -224,7 +225,10 @@ let cardKey = "";
 const cards = {};          // tool number -> element references
 let printing = false;      // a print is running or paused: tool changes are locked
 let toolSettings = {};     // _MOSAIC_TOOLS_SETTINGS (presets)
-let filaments = {};        // tool number -> saved filament
+let filaments = {};        // tool number -> filament as shown (the Spoolman spool on top of the saved one)
+let filRaw = {};           // tool number -> filament as saved by MOSAIC_SET_FILAMENT (edited in the dialog)
+let spools = {};           // Spoolman spool id -> {color, material, name, vendor, remaining_weight, temp} or null
+let spoolAsked = "", spoolTime = 0;
 let checkFile = "", checkMeta = null;   // filament check: the file and its metadata
 let fileList = [];                      // newest G-code files, to check one before printing
 
@@ -266,7 +270,7 @@ function presetsFor(n) {
 const clean = s => String(s || "").replace(/["'\\#;]/g, "").trim();
 let fdTool = -1;
 function editFilament(n) {
-  fdTool = n; const f = filaments[n] || {};
+  fdTool = n; const f = filRaw[n] || {};
   $("fd_title").textContent = "T" + n + " filament";
   $("fd_mat").value = f.material || ""; $("fd_name").value = f.name || "";
   $("fd_col").value = f.color ? "#" + f.color.toLowerCase() : "#808080";
@@ -354,14 +358,16 @@ function updateCards(o, nums, v) {
     c.where.className = "pill " + (mounted ? "on" : "dock");
     c.mount.disabled = mounted || printing; c.dock.disabled = !mounted || printing; c.cal.disabled = printing;
     const f = filaments[n] || {};
-    const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "") + "|" + (f.spool_id || "");
+    const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "") + "|" + (f.spool_id || "") + "|" + Math.round(f.remaining_weight || 0);
     if (c.artKey !== key) {
       c.artKey = key;
       c.art.innerHTML = hotendSvg(f.color);
       c.fmat.textContent = f.material || (f.name ? "" : "No filament set");
       c.fmat.classList.toggle("note", !f.material && !f.name);
-      c.fname.textContent = (f.name || "") + (f.spool_id > 0 ? (f.name ? " · " : "") + "spool " + f.spool_id : "");
-      c.art.title = f.color ? "colour " + f.color : "";
+      const left = f.remaining_weight > 0 ? " · " + Math.round(f.remaining_weight) + " g" : "";
+      c.fname.textContent = (f.name || "") + (f.spool_id > 0 ? (f.name ? " · " : "") + "spool " + f.spool_id + left : "");
+      c.art.title = (f.color ? "colour " + f.color : "") + (f.fromSpool ? " (Spoolman)" : "");
+      c.fname.title = c.fname.textContent; c.fmat.title = c.fmat.textContent;
     }
     c.fedit.classList.toggle("hidden", !hasMosaicTools);
     const ps = hasMosaicTools ? presetsFor(n) : [];
@@ -395,6 +401,29 @@ function updateCards(o, nums, v) {
   });
 }
 
+// Spoolman: colour, material and name of a tool come from its spool when it has one
+// (the page server reads them through Moonraker's [spoolman], see mosaic_server.py).
+function withSpool(f) {
+  const s = f.spool_id > 0 ? spools[f.spool_id] : null;
+  if (!s) return f;
+  const g = Object.assign({}, f, { fromSpool: true, remaining_weight: s.remaining_weight });
+  if (s.color) g.color = s.color;
+  if (s.material) g.material = s.material;
+  const name = [s.vendor, s.name].filter(Boolean).join(" ");
+  if (name) g.name = name;
+  if (!(g.temp > 0) && s.temp > 0) g.temp = s.temp;
+  return g;
+}
+async function askSpools() {
+  const ids = Array.from(new Set(Object.values(filRaw).map(f => Number(f.spool_id) || 0).filter(x => x > 0))).sort((a, b) => a - b).join(",");
+  if (!ids || (ids === spoolAsked && Date.now() - spoolTime < 30000)) return;
+  spoolAsked = ids; spoolTime = Date.now();
+  try {
+    const r = await fetch("spool?ids=" + ids, { cache: "no-store" });
+    if (r.ok) spools = await r.json();
+  } catch (e) { /* no page server spool support or no Spoolman: show the saved filament */ }
+}
+
 async function refresh() {
   try {
     const base = ["toolchanger", "save_variables", "gcode_macro _MOSAIC_STATE", "gcode_macro _MOSAIC_SETTINGS",
@@ -424,7 +453,9 @@ async function refresh() {
 
     $("b_zq").classList.toggle("hidden", !o.mosaic_z_probe);
     const v = (o.save_variables && o.save_variables.variables) || {};
-    filaments = {}; nums.forEach(n => { const f = v["t" + n + "_filament"]; if (f && typeof f === "object") filaments[n] = f; });
+    filRaw = {}; nums.forEach(n => { const f = v["t" + n + "_filament"]; if (f && typeof f === "object") filRaw[n] = f; });
+    filaments = {}; nums.forEach(n => { if (filRaw[n]) filaments[n] = withSpool(filRaw[n]); });
+    askSpools();
     const ck = nums.join(",");
     if (ck !== cardKey) { cardKey = ck; buildCards(nums); }
     updateCards(o, nums, v);
