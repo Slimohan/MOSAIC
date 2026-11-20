@@ -159,20 +159,21 @@ press_gcode:
 ```
 
 ```
-# MOSAIC/mosaic.cfg, section 4: hand the motor to the mounted tool
-[toolchanger]
-after_change_gcode:
-    SYNC_EXTRUDER_MOTION EXTRUDER=shared_drive MOTION_QUEUE={tool.extruder}
-...
+# MOSAIC/mosaic.cfg, section 2: the shared motor
+[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+variable_motor: 'shared_drive'
 
 # MOSAIC/mosaic.cfg, section 5
 [tool T0]
 tool_number: 0
 extruder: extruder
+params_pressure_advance: 0.045
+params_pressure_advance_smooth_time: 0.04
 
 [tool T1]
 tool_number: 1
 extruder: extruder1
+params_pressure_advance: 0.062
 
 # MOSAIC/mosaic.cfg, section 6
 [gcode_macro _MOSAIC_TOOLS_SETTINGS]
@@ -180,8 +181,84 @@ variable_head_switch: 'carriage_switch'
 variable_dock_switches: 'dock_0, dock_1'
 ```
 
-See the README, "A hotend swapper with one extruder", for why the motor is handed over with `after_change_gcode`
-rather than klipper-toolchanger's `extruder_stepper:` tool option, and for the `heater_generic` alternative.
+The `after_change_gcode` hook in section 4 (`MOSAIC_AFTER_CHANGE`) hands the motor to the mounted tool and sets that tool's
+pressure advance. You do not write the `SYNC_EXTRUDER_MOTION` line yourself.
+
+**Where the pressure advance goes.** Klipper keeps pressure advance on the motor, not on the heater-only `[extruderN]`
+(it has no motor, so `SET_PRESSURE_ADVANCE EXTRUDER=extruder1` fails). With one shared motor there is one value at a time,
+so each tool needs its own and has to set it when it is mounted:
+
+- `params_pressure_advance` (and `params_pressure_advance_smooth_time`) in `[tool Tn]`: set on the motor after every
+  tool change. Tune it per hotend and write the number there. A tool without the line leaves the value alone.
+- `params_rotation_distance` in `[tool Tn]`: the same for the rotation distance, for tools with a different hotend
+  drive ratio or filament. Left out = not touched.
+- `SET_PRESSURE_ADVANCE ADVANCE=...` typed in the console, or sent by a slicer, has no `EXTRUDER=` and acts on the
+  active extruder, which is heater-only here. Include `core/mosaic_shared_extruder.cfg` in section 1 and it is sent to
+  the motor named in `variable_motor` instead (a command with its own `EXTRUDER=` is passed on unchanged). Klipper
+  allows only one `SET_PRESSURE_ADVANCE` macro, so do not use this file together with one of your own.
+  A value set that way lasts until the next tool change, when the tool's own `params_` value is set again.
+- For calibrating the pressure advance with the usual tower, mount the tool, set the line in `[tool Tn]`, then run
+  `MOSAIC_AFTER_CHANGE T=<n>` (or just change tools) so the printer has the same value the print will use.
+
+## Example C: the shared motor is the `[extruder]` stepper
+
+Some printers (Bondtech INDX style heads among them) have the one motor as the stepper of `[extruder]` itself, and T1, T2, ...
+are heater-only `[extruderN]` sections that the motor is switched over to. This works the same way as example B, with
+the motor named `extruder`:
+
+```
+# my_tools.cfg
+[extruder]                  # T0's heater AND the one motor
+step_pin: ...
+dir_pin: ...
+enable_pin: !...
+microsteps: 16
+rotation_distance: ...
+heater_pin: ...
+sensor_type: ...
+sensor_pin: ...
+control: pid
+...
+
+[extruder1]                 # T1: heater and thermistor only, no step_pin
+heater_pin: ...
+sensor_type: ...
+sensor_pin: ...
+control: pid
+...
+```
+
+```
+# MOSAIC/mosaic.cfg, section 2
+[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+variable_motor: 'extruder'
+```
+
+The tools and the `params_` lines are the same as in example B. `MOSAIC_AFTER_CHANGE` runs
+`SYNC_EXTRUDER_MOTION EXTRUDER=extruder MOTION_QUEUE=<tool's extruder>` for every tool, T0 included, so after T1 the
+motor goes back to T0's own queue. Pressure advance goes on `extruder` here, which is what the plain
+`SET_PRESSURE_ADVANCE` already does while T0 is active, but not while T1 is: use the optional
+`mosaic_shared_extruder.cfg` or the `params_` lines.
+
+If your printer has a different arrangement (every tool with its own motor, or a motor that is moved by a macro of
+your own), leave `variable_motor` empty and MOSAIC does nothing with the extruder motor.
+
+## Printing with a shared motor
+
+- **Retract before the change, prime after.** A hotend that is put away with the filament still pushed into it oozes,
+  and the new tool starts with an empty nozzle. `variable_retract` (section 2) pulls the filament back on the tool that
+  leaves and pushes it forward again when that tool is mounted, `retract_speed` / `unretract_speed` set the speeds.
+  It happens during a print only, or by hand with `MOSAIC_RETRACT` / `MOSAIC_PRIME` and `FORCE=1`. The push-back waits
+  for the tool's heater to reach its target (`prime_wait`); with the heater off nothing is pushed and the retract stays
+  pending, a later `MOSAIC_PRIME` (a print start can call it after heating the tool) does it. Set the slicer's tool change retraction to 0, or the filament is
+  pulled twice.
+- **Print start and end.** In `PRINT_START`, heat and mount the first tool with `T<n>` as always. At the end, `MOSAIC_TOOLS_OFF`
+  turns every heater off. The print start should look at `printer.toolchanger.status` after its tool change: when a
+  change failed the print is paused (see docking.md, "When a change fails during a print") but a macro that is already running
+  carries on to its end.
+- **Pending retracts are not saved.** A restart of Klipper forgets which tools are retracted, so a tool may come
+  back with its filament 1.5 mm short. Push it forward by hand when you see it: `MOSAIC_PRIME T=<n> FORCE=1` does
+  it only if MOSAIC still knows about a retract, otherwise use a plain `G1 E` with the tool hot.
 
 ## Switches
 
