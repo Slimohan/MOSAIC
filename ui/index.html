@@ -128,6 +128,7 @@
       <label for="fd_name">Name</label><input type="text" id="fd_name" maxlength="40" placeholder="Galaxy Blue">
       <label for="fd_col">Colour</label><input type="color" id="fd_col" value="#808080">
       <label for="fd_temp">Print temp</label><input type="number" id="fd_temp" min="0" max="500" step="5" placeholder="&deg;C">
+      <label for="fd_spool">Spoolman spool</label><input type="number" id="fd_spool" min="0" max="999999" step="1" placeholder="id, empty = none">
     </div>
     <datalist id="fd_mats"><option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU</option><option>PC</option><option>PA</option><option>PLA-CF</option><option>PETG-CF</option></datalist>
     <div class="bar">
@@ -233,6 +234,7 @@ function editFilament(n) {
   $("fd_mat").value = f.material || ""; $("fd_name").value = f.name || "";
   $("fd_col").value = f.color ? "#" + f.color.toLowerCase() : "#808080";
   $("fd_temp").value = f.temp > 0 ? f.temp : "";
+  $("fd_spool").value = f.spool_id > 0 ? f.spool_id : "";
   $("fdlg").returnValue = "";
   $("fdlg").showModal();
 }
@@ -244,7 +246,8 @@ $("fdlg").addEventListener("close", () => {
   const t = parseFloat($("fd_temp").value) || 0;
   const name = clean($("fd_name").value), mat = clean($("fd_mat").value).replace(/\s+/g, "-");
   gcode("MOSAIC_SET_FILAMENT T=" + n + " MATERIAL=" + (mat || '""') + ' NAME="' + name + '" COLOR=' +
-        $("fd_col").value.replace("#", "").toUpperCase() + " TEMP=" + t, "T" + n + " filament");
+        $("fd_col").value.replace("#", "").toUpperCase() + " TEMP=" + t +
+        " SPOOL=" + Math.max(0, Math.floor(Number($("fd_spool").value) || 0)), "T" + n + " filament");
 });
 
 function btn(text, fn, cls) { const b = document.createElement("button"); b.textContent = text; if (cls) b.className = cls; b.onclick = fn; return b; }
@@ -314,13 +317,13 @@ function updateCards(o, nums, v) {
     c.where.className = "pill " + (mounted ? "on" : "dock");
     c.mount.disabled = mounted || printing; c.dock.disabled = !mounted || printing; c.cal.disabled = printing;
     const f = filaments[n] || {};
-    const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "");
+    const key = (f.color || "") + "|" + (f.material || "") + "|" + (f.name || "") + "|" + (f.spool_id || "");
     if (c.artKey !== key) {
       c.artKey = key;
       c.art.innerHTML = hotendSvg(f.color);
       c.fmat.textContent = f.material || (f.name ? "" : "No filament set");
       c.fmat.classList.toggle("note", !f.material && !f.name);
-      c.fname.textContent = f.name || "";
+      c.fname.textContent = (f.name || "") + (f.spool_id > 0 ? (f.name ? " · " : "") + "spool " + f.spool_id : "");
       c.art.title = f.color ? "colour " + f.color : "";
     }
     c.fedit.classList.toggle("hidden", !hasMosaicTools);

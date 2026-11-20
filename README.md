@@ -54,6 +54,7 @@ made-up demo data, not a real machine.
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
+| `mosaic_shared_extruder.cfg` | Optional. For a hotend swapper with one shared extruder motor: makes `SET_PRESSURE_ADVANCE` act on that motor. |
 | `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools and their hardware, switches, dock positions. `install.sh` copies it once. |
 | `docs/` | Hardware examples, the docking guide, and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
@@ -190,6 +191,13 @@ update only replaces `~/MOSAIC` (what `core/` points to); your files in the MOSA
 the update panel, run `git pull` in `~/MOSAIC` and restart Klipper. After an update, run `./install.sh` once more if the
 release notes say a template changed: it saves the new template beside yours as `.new` for you to compare.
 
+**Upgrading from the first release.** Your `mosaic.cfg` keeps working as it is: every new setting has a default, and the
+new features stay off until you switch them on. To use them, take these from the new template: in section 4, `[toolchanger]`
+gets `before_change_gcode: MOSAIC_BEFORE_CHANGE`, `after_change_gcode: MOSAIC_AFTER_CHANGE T={tool.tool_number}` and
+`error_gcode: MOSAIC_TOOLCHANGE_ERROR` (remove a `SYNC_EXTRUDER_MOTION` line of yours and set `variable_motor` instead); in
+section 2 the new settings (`motor`, `retract`, `pause_on_error`, `auto_init`, `max_offset_x/y/z`, ...); in section 7 `check_count`,
+`accel_fast` and `accel_slow`. A printer with `[pause_resume]` in `printer.cfg` gets the pause on a failed tool change.
+
 ## Setup, once
 
 1. **Test the Nudge by hand.** Run `MOSAIC_NUDGE_QUERY` with the pin at rest: it must say `open`. Push the pin
@@ -239,17 +247,26 @@ sensor_pin: ...
 [tool T1]
 tool_number: 1
 extruder: extruder1
-
-[toolchanger]
-after_change_gcode:
-    SYNC_EXTRUDER_MOTION EXTRUDER=shared_drive MOTION_QUEUE={tool.extruder}
+params_pressure_advance: 0.062     # this tool's pressure advance, see below
 ```
 
+and in section 2 of `MOSAIC/mosaic.cfg`: `variable_motor: 'shared_drive'`. The template's hooks in section 4
+(`before_change_gcode`, `after_change_gcode`, `error_gcode`) do the rest: after every change the motor is handed to
+the mounted tool (`SYNC_EXTRUDER_MOTION`), and that tool's pressure advance and rotation distance are set on it. This
+replaces klipper-toolchanger's own `extruder_stepper:` tool option, which passes the full section name
+(`extruder_stepper shared_drive`) to `SYNC_EXTRUDER_MOTION` and fails.
+
 Klipper's cold-extrusion check then works for every tool, and slicer lines like `M104 T1 S220` reach the right
-heater without `mosaic_tool_heaters.cfg` (include it anyway if you use the standby handling, see below). Use
-`after_change_gcode` as shown rather than klipper-toolchanger's own `extruder_stepper:` tool option: that option
-passes the full section name (`extruder_stepper shared_drive`) to `SYNC_EXTRUDER_MOTION`, which expects the short
-name, so the hand-over fails.
+heater without `mosaic_tool_heaters.cfg` (include it anyway if you use the standby handling, see below).
+`docs/hardware.md` shows this layout and the other common one (the motor is the stepper of `[extruder]` itself) in full.
+
+**Pressure advance, retract and prime.** Pressure advance is a property of the motor in Klipper, and the shared motor
+has one value at a time, so each tool brings its own: `params_pressure_advance` (and `..._smooth_time`,
+`params_rotation_distance`) in its `[tool Tn]` section, set when the tool is mounted. A plain
+`SET_PRESSURE_ADVANCE` (slicers and the web UIs send it without `EXTRUDER=`) does not work with heater-only tools;
+include `core/mosaic_shared_extruder.cfg` (section 1) to send it to the shared motor. `variable_retract` pulls the
+filament back on the tool that is put away and pushes it forward when it is mounted again, during a print only. Set
+the slicer's tool change retraction to 0 when you use it. Details and limits: `docs/hardware.md`.
 
 **Generic heaters.** Each tool gets a `[heater_generic ...]` and the tool points at it with `heater:`; leave out
 `extruder:`:
@@ -298,7 +315,9 @@ first. If a `[tool Tn]` section is left in `printer.cfg` above the include line,
 | `MOSAIC_TOOL_STANDBY [T=]` | Set the tool to `standby_temp` and remember its temperature. |
 | `MOSAIC_TOOLS_OFF` | All tool heaters off. |
 | `MOSAIC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target, filament. |
-| `MOSAIC_SET_FILAMENT [T=] MATERIAL= NAME= COLOR= TEMP= [CLEAR=1]` | The filament loaded in a tool, see "Filament per tool". |
+| `MOSAIC_SET_FILAMENT [T=] MATERIAL= NAME= COLOR= TEMP= [SPOOL=] [CLEAR=1]` | The filament loaded in a tool, see "Filament per tool". |
+| `MOSAIC_RETRACT [T=]`, `MOSAIC_PRIME [T=]` | Shared extruder: pull the filament of a tool back / push it forward, see `docs/hardware.md`. Normally the changer hooks do it. |
+| `MOSAIC_RESUME [T=]` | After a failed tool change during a print (the print is paused): fix the tool by hand, run this. See `docs/docking.md`. |
 | `MOSAIC_TOOL_LOG [RESET=1]` | The last tool changes with their time and result. |
 
 `_MOSAIC_TOOLS_SETTINGS` has the settings `standby_mode`, `standby_temp`, `wait_on_select` and `presets`. With `standby_mode: 'off'`
@@ -331,7 +350,12 @@ MOSAIC_SET_FILAMENT T=2 MATERIAL=PETG NAME="Galaxy Blue" COLOR=1E5AFF TEMP=240
 
 `COLOR` is six hex digits without the `#` (Klipper reads `#` as the start of a comment). Values you leave out stay as
 they were, so `MOSAIC_SET_FILAMENT T=2 TEMP=245` only changes the temperature; `CLEAR=1` forgets the filament. It is
-saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is not needed and not used.
+saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is not needed.
+
+**Spoolman.** `SPOOL=<id>` stores the Spoolman spool of a tool (`SPOOL=0` forgets it). When that tool is mounted,
+MOSAIC runs `SET_ACTIVE_SPOOL ID=<id>`, which is what Moonraker's Spoolman component provides, so the filament used
+is booked to the right spool after every change. Without Moonraker's `[spoolman]` the command does not exist and
+nothing happens. `variable_spoolman: False` in section 2 turns it off.
 
 The card shows a hotend drawn in the filament colour with the material and name. The print temperature becomes a
 temperature button on the card.
@@ -431,7 +455,8 @@ A sensible first test order on the printer: `G28`, `SELECT_TOOL T=0`, `SELECT_TO
 
 | Command | Meaning |
 |---|---|
-| `MOSAIC_CALIBRATE [TOOL=n] [XY=0] [Z=0] [TEMP=]` | Measure the offsets of all tools (or one). `XY=0` or `Z=0` leaves an axis out. `TEMP` heats each nozzle to that temperature (C) for the measurement, 0 = cold. |
+| `MOSAIC_CALIBRATE [TOOL=n] [XY=0] [Z=0] [TEMP=] [RUNS=n] [SAVE=0]` | Measure the offsets of all tools (or one). `XY=0` or `Z=0` leaves an axis out. `TEMP` heats each nozzle to that temperature (C) for the measurement, 0 = cold. `RUNS` measures every tool n times (1 to 50) and saves the mean, with the spread in the console. `SAVE=0` measures and reports only. Not during a print. |
+| `MOSAIC_Z_REFERENCE` | Right after a homing by touch (Beacon contact, Cartographer touch) with a tool that is not the reference tool: shifts Z to the frame of the reference tool. |
 | `MOSAIC_CALIBRATE_XY`, `MOSAIC_CALIBRATE_Z` | Shortcuts for `XY=1 Z=0` and `XY=0 Z=1`. |
 | `MOSAIC_AUTO_Z_OFFSET [TEMP=]` | Same as `MOSAIC_CALIBRATE_Z`, meant for `PRINT_START` after homing. |
 | `MOSAIC_NUDGE_QUERY` | Is the Nudge probe triggered? For testing the wiring. |
@@ -481,6 +506,28 @@ klipper-toolchanger. If a tool prints to the wrong side after the first calibrat
 way round on your set-up; check this once with two tools touching the same spot before you rely on it. The r2pdx
 MadMax calibration macros use the same variable names. Do not let two offset tools write the offsets of the
 same tool at the same time.
+
+## Repeatability, safety and the Z reference
+
+- **`RUNS=`.** One measurement per tool is enough when the tools are seated well, but you cannot see that from one number.
+  `MOSAIC_CALIBRATE RUNS=5` mounts each tool once and takes it to the Nudge five times, the mean is saved, and the console
+  prints the spread (largest minus smallest) per axis. A spread above `run_range_warning` (0.05 mm by default) gets a
+  warning: a tool that is seated badly, a dirty nozzle or a loose Nudge. The reference tool is located once.
+- **`SAVE=0`.** Measures and prints the result against the saved offset, saves nothing. Use it to check a tool.
+- **Start check.** Before it moves, the calibration checks that every tool it will measure can reach the Nudge with the
+  offset it has now, with the probing travel of `[tools_calibrate]` (`spread`, 5 mm by default) plus `nudge_margin`
+  (1 mm by default) free on each side of the spot where the tool starts, inside the axis limits,
+  and that the Nudge reads *open*. A tool whose old offset is far off, a pin that is pressed or pointing the wrong way, are
+  found before anything crashes. Run again after you fixed it.
+- **Limits per axis.** `variable_max_offset_x` / `_y` / `_z` in section 2 (0 = use `max_offset`) refuse a measured
+  offset that is too big for that axis. 2 mm in XY and 3 mm in Z is a good guard on a finished printer.
+- **Hot.** A hotend grows when it is heated. If you home Z by a hot touch (Beacon contact, Cartographer touch), measure
+  the offsets at the same temperature: `MOSAIC_CALIBRATE TEMP=150` with the touch temperature, or a cold touch with a
+  cold calibration. A mix puts each hotend's thermal growth into the offsets.
+- **`MOSAIC_Z_REFERENCE`.** Z homed by a touch with a tool that is not the reference tool sits in that tool's frame.
+  Run `MOSAIC_Z_REFERENCE` right after the homing: it shifts Z by that tool's saved Z offset (with `tool_parameter`,
+  using klipper-toolchanger's `ADJUST_Z_AFTER_TOOL_NOZZLE_HOME`; with `gcode_offset`, with `SET_KINEMATIC_POSITION`, which needs
+  `[force_move]`) so that the other tools are right too. Do it once per homing, not after every tool change.
 
 ## If a calibration stops half way
 
@@ -565,6 +612,13 @@ the installer itself has not been run on a real Pi. The filament, temperature bu
 features were tested in a Klipper-style macro simulator (same template rules and parameter parsing, not Klipper
 itself) and in a headless browser against a fake Moonraker with an 8 tool printer, idle and printing. `uninstall.sh`
 has not been run on a real Pi.
+
+The features added after a tester's review (retract and prime for a shared extruder, per tool pressure advance and
+rotation distance, the pause and `MOSAIC_RESUME` after a failed change, the tool count check, acceleration per dock move,
+the mounted tool found at startup, `MOSAIC_Z_REFERENCE`, Spoolman, `RUNS=`, `SAVE=` and the start checks of the calibration)
+were run in the same batch mode on Klipper and on Kalico, with simulated switches, a simulated print state and a stand-in
+for the Nudge, and with a three tool config in both shared extruder layouts. Older `mosaic.cfg` files without the new
+settings were run again and behave as before.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
