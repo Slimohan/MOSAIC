@@ -182,9 +182,10 @@ def make_handler(moonraker):
             if self.path == "/spool" or self.path.startswith("/spool?"):
                 return self._spools()
             if self.path == "/spools":
+                # an empty list without Spoolman (no [spoolman] in Moonraker, or not reachable):
+                # the page then uses the plain spool id field
                 lst = spool_list(moonraker)
-                return self._send(200 if lst is not None else 503,
-                                  json.dumps(lst if lst is not None else {"error": "no Spoolman"}).encode())
+                return self._send(200, json.dumps(lst or []).encode())
             if self.path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
