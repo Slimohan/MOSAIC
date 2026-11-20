@@ -706,7 +706,17 @@ $("b_logreset").onclick = () => gcode("MOSAIC_TOOL_LOG RESET=1", "Clear the log"
 // the filament saved for each tool.
 const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "").trim()); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
 const colourDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-const listOf = x => Array.isArray(x) ? x : String(x || "").split(";").map(s => s.trim());
+// A per-tool list from the file metadata. Moonraker gives some as real lists (filament_colors),
+// some as the text of a JSON list ('["PLA", "PETG"]', filament_type and filament_name), and
+// older versions as the slicer's "PLA;PETG".
+const listOf = x => {
+  if (Array.isArray(x)) return x.map(v => String(v === null || v === undefined ? "" : v).trim());
+  const s = String(x || "").trim();
+  if (s.startsWith("[")) {
+    try { const a = JSON.parse(s.replace(/'/g, '"')); if (Array.isArray(a)) return listOf(a); } catch (e) { /* not JSON: split below */ }
+  }
+  return s.split(";").map(v => v.trim());
+};
 function compare(want, wtype, f) {
   const have = hexRgb(f.color), htype = (f.material || "").toUpperCase(), diff = [];
   if (!f.material && !f.color) return ["no filament set", "note"];
@@ -741,9 +751,17 @@ async function filamentCheck(printFile, state, nums) {
   }
   const m = checkMeta || {};
   const colours = listOf(m.filament_colors || m.extruder_colors), types = listOf(m.filament_type), names = listOf(m.filament_name);
-  const used = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools : colours.map((_, i) => i).filter(i => colours[i]);
+  // the tools the file prints with: referenced_tools when the slicer wrote it, else the ones with
+  // filament (weights above 0); without weights every tool with a colour counts
+  const weights = listOf(m.filament_weights).map(Number);
+  const hasWeights = weights.some(w => w > 0);
+  const listed = colours.map((_, i) => i).filter(i => colours[i] || types[i]);
+  const usedSet = Array.isArray(m.referenced_tools) && m.referenced_tools.length ? m.referenced_tools.map(Number)
+    : (hasWeights ? listed.filter(i => weights[i] > 0) : listed);
+  const used = Array.from(new Set(listed.concat(usedSet))).sort((a, b) => a - b);
   const rows = used.map(n => {
     const want = hexRgb(colours[n]), wtype = (types[n] || "").toUpperCase(), f = filaments[n] || {};
+    if (!usedSet.includes(n)) return { n, at: -1, want: colours[n], wtype, wname: names[n] || "", f, res: "not used in this file", cls: "note" };
     let [res, cls] = nums.includes(n) ? compare(want, wtype, f) : ["tool not configured", "bad"];
     const at = cls === "bad" || cls === "note" ? holder(want, wtype, nums) : -1;
     if (at >= 0 && at !== n) res += " — loaded in T" + at;
