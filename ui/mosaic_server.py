@@ -71,6 +71,8 @@ def _spool_fields(r):
         "remaining_weight": r.get("remaining_weight"),
         "temp": float(temp) if isinstance(temp, (int, float)) else 0.0,
         "location": str(r.get("location") or ""),
+        "initial_weight": r.get("initial_weight") or fil.get("weight"),
+        "last_used": r.get("last_used"),
     }
 
 
