@@ -18,9 +18,10 @@
 #
 # Spoolman: a tool whose filament has a spool id (SPOOL=, or the Spoolman panel
 # of Mainsail) takes colour, material and name from that spool, on the page
-# (GET /spool?ids=1,2) and in the slicer sync. Read through Moonraker's
-# [spoolman] component (/server/spoolman/proxy, GET /v1/spool/<id> only),
-# kept 30 s. Without Spoolman nothing changes.
+# (GET /spool?ids=1,2) and in the slicer sync; GET /spools lists the spools
+# that are not archived, for choosing one on the page. Read through Moonraker's
+# [spoolman] component (/server/spoolman/proxy, only GET /v1/spool and
+# GET /v1/spool/<id>), kept 30 s. Without Spoolman nothing changes.
 #
 # Part of MOSAIC (github.com/Slimohan/MOSAIC), GPL-3.0.
 
@@ -57,6 +58,54 @@ def _hex6(v):
     return v[:6] if len(v) >= 6 and all(c in "0123456789ABCDEF" for c in v[:6]) else ""
 
 
+def _spool_fields(r):
+    """The few values of a Spoolman spool object that MOSAIC uses."""
+    fil = r.get("filament") or {}
+    temp = fil.get("settings_extruder_temp")
+    return {
+        "id": int(r.get("id")),
+        "color": _hex6(fil.get("color_hex") or fil.get("multi_color_hexes")),
+        "material": str(fil.get("material") or ""),
+        "name": str(fil.get("name") or ""),
+        "vendor": str((fil.get("vendor") or {}).get("name") or ""),
+        "remaining_weight": r.get("remaining_weight"),
+        "temp": float(temp) if isinstance(temp, (int, float)) else 0.0,
+        "location": str(r.get("location") or ""),
+    }
+
+
+def _proxy_get(moonraker, path):
+    """GET a Spoolman path through Moonraker's [spoolman] proxy (v1 and v2 answers)."""
+    r = _call(moonraker, "POST", "/server/spoolman/proxy",
+              {"request_method": "GET", "path": path}, timeout=5).get("result")
+    if isinstance(r, dict) and "response" in r and ("error" in r or len(r) <= 2):
+        r = r.get("response")
+    return r
+
+
+_spool_list = [0.0, None]
+
+
+def spool_list(moonraker):
+    """All spools that are not archived, newest list kept 30 s. None without Spoolman."""
+    now = time.time()
+    with _spool_lock:
+        if _spool_list[1] is not None and now - _spool_list[0] < SPOOL_TTL:
+            return _spool_list[1]
+    out = None
+    try:
+        r = _proxy_get(moonraker, "/v1/spool?allow_archived=false")
+        if isinstance(r, list):
+            out = [_spool_fields(s) for s in r if isinstance(s, dict) and s.get("id") is not None]
+    except Exception:
+        out = None
+    with _spool_lock:
+        _spool_list[0], _spool_list[1] = now, out
+        for s in out or []:
+            _spools[s["id"]] = (now, s)
+    return out
+
+
 def spool_info(moonraker, sid):
     """Colour, material, name ... of Spoolman spool `sid`, or None (no Spoolman,
     no such spool). Cached SPOOL_TTL seconds, a failure too."""
@@ -68,22 +117,9 @@ def spool_info(moonraker, sid):
             return c[1]
     info = None
     try:
-        r = _call(moonraker, "POST", "/server/spoolman/proxy",
-                  {"request_method": "GET", "path": "/v1/spool/%d" % sid}, timeout=5).get("result") or {}
-        if isinstance(r, dict) and "response" in r and ("error" in r or len(r) <= 2):
-            r = r.get("response") or {}           # Moonraker with use_v2_response
-        fil = r.get("filament") or {}
+        r = _proxy_get(moonraker, "/v1/spool/%d" % sid) or {}
         if r.get("id") is not None:
-            temp = fil.get("settings_extruder_temp")
-            info = {
-                "id": sid,
-                "color": _hex6(fil.get("color_hex") or fil.get("multi_color_hexes")),
-                "material": str(fil.get("material") or ""),
-                "name": str(fil.get("name") or ""),
-                "vendor": str((fil.get("vendor") or {}).get("name") or ""),
-                "remaining_weight": r.get("remaining_weight"),
-                "temp": float(temp) if isinstance(temp, (int, float)) else 0.0,
-            }
+            info = _spool_fields(r)
     except Exception:
         info = None
     with _spool_lock:
@@ -143,6 +179,10 @@ def make_handler(moonraker):
                 return self._proxy("GET")
             if self.path == "/spool" or self.path.startswith("/spool?"):
                 return self._spools()
+            if self.path == "/spools":
+                lst = spool_list(moonraker)
+                return self._send(200 if lst is not None else 503,
+                                  json.dumps(lst if lst is not None else {"error": "no Spoolman"}).encode())
             if self.path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")

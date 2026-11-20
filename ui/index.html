@@ -64,7 +64,10 @@
   .fil .ftxt { min-width:0; flex:1; overflow:hidden; }
   .fil button { flex:none; }
   .fil .fmat { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .fil .fname { font-size:12px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fil .fname { font-size:12px; color:var(--mute); line-height:1.25; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+  .fil .fspool { font-size:12px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+  dialog select { width:100%; }
+  .sw.big { width:16px; height:16px; vertical-align:-3px; }
   .sw { display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid var(--line); vertical-align:-1px; margin-right:5px; }
   .presets { display:flex; flex-wrap:wrap; gap:4px; }
   .card .presets button { padding:3px 7px; font-size:12px; }
@@ -166,7 +169,8 @@
       <label for="fd_name">Name</label><input type="text" id="fd_name" maxlength="40" placeholder="Galaxy Blue">
       <label for="fd_col">Colour</label><input type="color" id="fd_col" value="#808080">
       <label for="fd_temp">Print temp</label><input type="number" id="fd_temp" min="0" max="500" step="5" placeholder="&deg;C">
-      <label for="fd_spool">Spoolman spool</label><input type="number" id="fd_spool" min="0" max="999999" step="1" placeholder="id, empty = none">
+      <label for="fd_spool_sel">Spoolman spool</label><span><select id="fd_spool_sel"><option value="">no spool</option></select></span>
+      <label for="fd_spool" id="fd_spool_lab">Spool id</label><input type="number" id="fd_spool" min="0" max="999999" step="1" placeholder="id, empty = none">
     </div>
     <datalist id="fd_mats"><option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU</option><option>PC</option><option>PA</option><option>PLA-CF</option><option>PETG-CF</option></datalist>
     <div class="bar">
@@ -276,9 +280,50 @@ function editFilament(n) {
   $("fd_col").value = f.color ? "#" + f.color.toLowerCase() : "#808080";
   $("fd_temp").value = f.temp > 0 ? f.temp : "";
   $("fd_spool").value = f.spool_id > 0 ? f.spool_id : "";
+  fillSpoolList(f.spool_id > 0 ? Number(f.spool_id) : 0);
   $("fdlg").returnValue = "";
   $("fdlg").showModal();
 }
+// The spools of Spoolman to choose from (the page server reads them through Moonraker's
+// [spoolman]). Without Spoolman the list stays empty and the id field is used.
+let spoolList = null;
+async function fillSpoolList(cur) {
+  const sel = $("fd_spool_sel");
+  const show = ok => {
+    sel.closest("span").classList.toggle("hidden", !ok);
+    sel.closest(".grid").querySelector('label[for="fd_spool_sel"]').classList.toggle("hidden", !ok);
+    $("fd_spool").classList.toggle("hidden", ok); $("fd_spool_lab").classList.toggle("hidden", ok); };
+  show(!!(spoolList && spoolList.length));
+  try {
+    const r = await fetch("spools", { cache: "no-store" });
+    spoolList = r.ok ? await r.json() : null;
+  } catch (e) { spoolList = null; }
+  if (!Array.isArray(spoolList) || !spoolList.length) { show(false); return; }
+  sel.textContent = "";
+  const none = document.createElement("option"); none.value = ""; none.textContent = "no spool"; sel.appendChild(none);
+  const list = spoolList.slice().sort((a, b) => b.id - a.id);
+  if (cur > 0 && !list.some(s => s.id === cur)) list.unshift({ id: cur, name: "(not in Spoolman, or archived)" });
+  list.forEach(s => {
+    const o = document.createElement("option"); o.value = s.id;
+    const left = s.remaining_weight > 0 ? Math.round(s.remaining_weight) + " g" : "";
+    o.textContent = "#" + s.id + "  " + [[s.vendor, s.name].filter(Boolean).join(" "), s.material, left, s.location].filter(Boolean).join(" · ");
+    if (s.color) o.style.boxShadow = "inset 6px 0 0 #" + s.color;
+    sel.appendChild(o);
+  });
+  sel.value = cur > 0 ? String(cur) : "";
+  show(true);
+}
+$("fd_spool_sel").addEventListener("change", () => {
+  const id = Number($("fd_spool_sel").value) || 0;
+  $("fd_spool").value = id > 0 ? id : "";
+  const s = (spoolList || []).find(x => x.id === id);
+  if (!s) return;
+  // the loaded filament is now this spool's: take its values (they can still be changed before saving)
+  if (s.material) $("fd_mat").value = s.material;
+  $("fd_name").value = [s.vendor, s.name].filter(Boolean).join(" ").slice(0, 40);
+  if (s.color) $("fd_col").value = "#" + s.color.toLowerCase();
+  if (s.temp > 0) $("fd_temp").value = s.temp;
+});
 $("fdlg").addEventListener("close", () => {
   const v = $("fdlg").returnValue, n = fdTool;
   if (n < 0) return;
@@ -306,7 +351,8 @@ function buildCards(nums) {
     const ftxt = document.createElement("div"); ftxt.className = "ftxt";
     const fmat = document.createElement("div"); fmat.className = "fmat";
     const fname = document.createElement("div"); fname.className = "fname";
-    ftxt.append(fmat, fname);
+    const fspool = document.createElement("div"); fspool.className = "fspool";
+    ftxt.append(fmat, fname, fspool);
     const fedit = btn("Filament", () => editFilament(n));
     fil.append(art, ftxt, fedit);
     const temp = document.createElement("div"); temp.className = "temp";
@@ -338,7 +384,7 @@ function buildCards(nums) {
     row2.append(mount, dock, cal);
     el.append(h, fil, temp, row1, pre, fanRow, off, row2);
     box.appendChild(el);
-    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock, cal, art, fmat, fname, fedit, pre, artKey: null, preKey: null };
+    cards[n] = { el, where, cur, tgt, state, inp, fan, fanLabel, fanRow, off, mount, dock, cal, art, fmat, fname, fspool, fedit, pre, artKey: null, preKey: null };
   });
 }
 
@@ -365,7 +411,11 @@ function updateCards(o, nums, v) {
       c.fmat.textContent = f.material || (f.name ? "" : "No filament set");
       c.fmat.classList.toggle("note", !f.material && !f.name);
       const left = f.remaining_weight > 0 ? " · " + Math.round(f.remaining_weight) + " g" : "";
-      c.fname.textContent = (f.name || "") + (f.spool_id > 0 ? (f.name ? " · " : "") + "spool " + f.spool_id + left : "");
+      c.fname.textContent = f.name || "";
+      c.fname.classList.toggle("hidden", !f.name);
+      c.fspool.textContent = f.spool_id > 0 ? "spool " + f.spool_id + left : "";
+      c.fspool.classList.toggle("hidden", !(f.spool_id > 0));
+      c.fspool.title = c.fspool.textContent;
       c.art.title = (f.color ? "colour " + f.color : "") + (f.fromSpool ? " (Spoolman)" : "");
       c.fname.title = c.fname.textContent; c.fmat.title = c.fmat.textContent;
     }
