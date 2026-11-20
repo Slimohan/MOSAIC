@@ -1,6 +1,6 @@
 # Path patterns for different docks
 
-These are patterns, not measured settings for any particular printer. They show how to describe where the carriage comes from and how it leaves. Put them into `variable_approach`, `variable_pickup_out` and `variable_dropoff_out` (shared in `_MOSAIC_DOCK_SETTINGS`, or per tool). All distances are relative to the dock position of that tool (`park_x`, `park_y`, `park_z`). Always check with `DRY=1` first.
+These are patterns, not measured settings for any particular printer. They show how to describe where the carriage comes from and how it leaves. Put them into `variable_approach`, `variable_pickup_in`, `variable_dropoff_in`, `variable_pickup_out` and `variable_dropoff_out` (shared in `_MOSAIC_DOCK_SETTINGS`, or per tool). All distances are relative to the dock position of that tool (`park_x`, `park_y`, `park_z`). Always check with `DRY=1` first.
 
 Format: `dx,dy,dz[,speed[,v]]` steps separated by `/`. The last move of the approach goes to the dock position itself.
 
@@ -74,3 +74,20 @@ variable_approach: "-20,-25,0/-3,-5,0"
 ```
 
 Docks without their own path keep using the shared one.
+
+## 8. Different entry for pickup and drop-off
+
+Slide the tool onto the dock sideways: a drop-off comes in beside the dock and slides onto it, a pickup goes in straight and slides out sideways, so the carriage never pushes against the tool it just left. This example has the docks at the front of the printer, the carriage coming from higher Y, 3.2 mm of sideways slide:
+
+```
+variable_pickup_in:  "0,45,0/0,40,0/0,18,0,120,,fast"
+variable_dropoff_in: "3.2,45,0/3.2,30,0/3.2,6,0,120,,fast/3.2,0,0,20,,slow"
+variable_pickup_out: "3.2,0,0,20,,slow/3.2,12,0,20,v,slow/3.2,30,0,120,,fast/3.2,45,0"
+variable_dropoff_out: "0,18,0,20,,slow/0,40,0,120,,fast/0,45,0"
+```
+
+A pickup stands 45 mm away from the dock (higher Y), goes straight in (the last move to the dock position is the engage move), waits, slides 3.2 mm sideways, checks the carriage switch at 12 mm, then leaves along the 3.2 mm lane. A drop-off comes along the 3.2 mm lane, and its last move (the engage move) slides onto the dock; it leaves straight back. The first step of every path is on the same lane, 45 mm from the dock row.
+
+## 9. Printers whose bed moves in Z
+
+Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only.

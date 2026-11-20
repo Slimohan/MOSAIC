@@ -10,7 +10,7 @@ This is the docking part of MOSAIC. The calibration (`mosaic.cfg`) and the tool 
 
 - The coupling is **passive**: no motor, servo or pneumatic lock. Picking up and dropping off is only carriage motion. The dock holds the tool and the carriage takes it (or leaves it) by moving in and out along a path. If your mechanism has an actuator, these macros do not drive it.
 - Positions are raw carriage coordinates in mm. Z is up.
-- The carriage can travel sideways over all docks at one "safe" height.
+- The carriage can travel sideways over all docks at one "safe" height. (A printer whose **bed** moves in Z has no such height: set `z_mode` to `keep`, see [Printers whose bed moves in Z](#printers-whose-bed-moves-in-z).)
 - Switches are optional but recommended: **one switch on the carriage** that is pressed while any tool is attached, and **one switch per dock** that is pressed while its tool sits in the dock. See [Tool switches](#tool-switches).
 
 ## What it does
@@ -18,14 +18,14 @@ This is the docking part of MOSAIC. The calibration (`mosaic.cfg`) and the tool 
 A pickup of tool `n` does this, every number from your settings:
 
 1. Go up to `safe_z` if the carriage is lower.
-2. Travel sideways at that height to the first step of the approach path, go down there.
-3. Walk the approach path, the last move into the dock position is slow (`engage_speed`).
+2. Travel sideways at that height to the first step of the entry path, go down there.
+3. Walk the entry path (the pickup path for a pickup, the drop-off path for a drop-off; both are the approach path unless you give them their own), the last move into the dock position is slow (`engage_speed`).
 4. Wait `seat_dwell` ms.
-5. Walk the exit path out of the dock, slowly (`pullout_speed`), optionally checking the carriage switch on the way.
+5. Walk the exit path of that action out of the dock, slowly (`pullout_speed`), optionally checking the carriage switch on the way.
 6. Once the carriage is out, read both switches and compare with what must be true now (see [Tool switches](#tool-switches)).
 7. Go up to `safe_z`, then sideways to where the print was, then down. (Only if you pass the restore position, see below.)
 
-A drop-off is the same with its own exit path. It is called for the old tool first and for the new tool second during `T1`, `SELECT_TOOL` and so on, all handled by klipper-toolchanger.
+A drop-off is the same with its own entry and exit path. It is called for the old tool first and for the new tool second during `T1`, `SELECT_TOOL` and so on, all handled by klipper-toolchanger.
 
 Safety built in:
 
@@ -75,10 +75,12 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `restore_move` | `1` = after the change go back to the print position safely (sideways at safe height first, then down) |
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
-| `approach` | Default approach path for all docks, see [Paths](#paths) |
-| `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the approach path backwards. |
+| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part, for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `approach` | Default entry path for all docks, see [Paths](#paths) |
+| `pickup_in`, `dropoff_in` | Own entry path for a pickup and for a drop-off. Empty means: use `approach`. |
+| `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the entry path of the same action backwards. |
 
-**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z`, and optional own `approach`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
+**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z` (not used with `z_mode: keep`), and optional own `approach`, `pickup_in`, `dropoff_in`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
 
 ### Teach a dock
 
@@ -95,7 +97,7 @@ Docks in an even row: teach one, then `MOSAIC_DOCK_FILL FROM=0 TO=5 DX=45` calcu
 ```
 ENTER_DOCKING_MODE
 MOSAIC_DOCK_GOTO T=2 WHERE=stage     # carriage stops just before the dock, look at the alignment
-MOSAIC_DOCK_GOTO T=2 WHERE=park      # slow move to the dock position
+MOSAIC_DOCK_GOTO T=2 WHERE=park      # slow move to the dock position (MODE=dropoff drives the drop-off entry path)
 MOSAIC_DOCK_LEAVE T=2 MODE=pickup    # walk out as a pickup would
 EXIT_DOCKING_MODE
 ```
@@ -171,11 +173,30 @@ dx,dy,dz[,speed[,v[,accel]]]
 - `speed` in mm/s, empty = the default for that kind of move.
 - `accel` in mm/s², or `fast` / `slow` (the `accel_fast` / `accel_slow` settings). Empty = `fast` on the approach and `slow` on the way out of the dock. It needs `accel_fast` / `accel_slow` to be set, or a number.
 - `v` in a pickup exit path: check right after that step that the carriage switch shows a tool. Without a carriage switch it runs `VERIFY_TOOL_DETECTED` instead, which does nothing when the tools have no detection pin.
-- The last move of the approach goes to the dock position itself, you do not write it.
-- The **first approach step must be in free space** where the carriage can come down from `safe_z`.
-- If an exit path is empty, the approach path is walked backwards (speeds in the approach are ignored on the way out).
+- The last move of an entry path goes to the dock position itself, you do not write it.
+- The **first entry step must be in free space** where the carriage can come down from `safe_z` (with `z_mode: keep`: where it can travel to from the print).
+- Which entry path is used: for a pickup the dock's own `pickup_in`, else the shared `pickup_in`, else the dock's own `approach`, else the shared `approach`. A drop-off the same with `dropoff_in`. Empty everywhere is an error that `MOSAIC_DOCK_CHECK` reports.
+- If an exit path is empty (the dock's own and the shared one), the entry path of the same action is walked backwards (speeds in the entry path are ignored on the way out).
+- Why separate entry paths: some docks are entered differently for the two actions, e.g. a drop-off that comes in beside the dock and slides sideways onto it, while a pickup goes in straight and slides out sideways. The two paths then have different last steps, so the carriage never runs into the tool it just left.
 
-The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), go to 5 mm in front, then slide in. Examples for other dock layouts (from above, sideways, lift-out, tool check partway) are in [`dock_layouts.md`](dock_layouts.md).
+The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), go to 5 mm in front, then slide in. Examples for other dock layouts (from above, sideways, lift-out, tool check partway, separate pickup and drop-off paths, bed-Z printers) are in [`dock_layouts.md`](dock_layouts.md).
+
+## Printers whose bed moves in Z
+
+On a printer where the bed, not the toolhead, moves in Z (docks at the front, nothing to lift over), the carriage cannot go "up to a safe height". Set
+
+```
+variable_z_mode: 'keep'
+```
+
+in part 1 of section 7. Then **no dock move has a Z part**: the macros do not go to `safe_z`, not to `park_z + dz` of a step, and the move back to the print position has no Z either. Z stays wherever it is. This also means:
+
+- `park_z`, `safe_z` and the third number (`dz`) of every step are ignored and not range-checked. Keep writing `0` for `dz`, the step format does not change.
+- `MOSAIC_DOCK_TEACH` does not store a `park_z`, `MOSAIC_DOCK_FILL` ignores `DZ`.
+- After a failed check (see below) there is no slow lift to `safe_z` either: the carriage stays where it is.
+- All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it.
+- klipper-toolchanger's own `t_command_restore_axis` defaults to `XYZ`. With `keep` the Z it restores is the Z it already has, so nothing should move, but `XY` says what you mean. I have not tried this on a real printer.
+- `z_mode` only changes the **dock** moves. `MOSAIC_CALIBRATE` and the Z probing of the tool offsets still move the nozzle in Z the way a toolhead-Z printer does, so they are not set up for a bed-Z printer yet.
 
 ## Speed and acceleration
 
@@ -219,8 +240,8 @@ This needs `[pause_resume]` in `printer.cfg` and `variable_pause_on_error: True`
 | `MOSAIC_DOCK_PICKUP T=n` / `MOSAIC_DOCK_DROPOFF T=n` | Used in the `[toolchanger]` hooks. `DRY=1` prints the plan. Moves only in `changing` state. |
 | `MOSAIC_DOCK_TEACH T=n` | Take the current carriage position as the dock position, print the lines to paste |
 | `MOSAIC_DOCK_FILL FROM=a TO=b DX= [DY= DZ=]` | Calculate the docks of a row from one taught dock |
-| `MOSAIC_DOCK_SET T=n PARK_X= PARK_Y= PARK_Z= TAUGHT= APPROACH= PICKUP_OUT= DROPOFF_OUT=` | Change a dock until restart |
-| `MOSAIC_DOCK_GOTO T=n WHERE=stage\|park` | Drive to a dock to check it (docking mode needed) |
+| `MOSAIC_DOCK_SET T=n PARK_X= PARK_Y= PARK_Z= TAUGHT= APPROACH= PICKUP_IN= DROPOFF_IN= PICKUP_OUT= DROPOFF_OUT=` | Change a dock until restart |
+| `MOSAIC_DOCK_GOTO T=n WHERE=stage\|park [MODE=pickup\|dropoff]` | Drive to a dock to check it, along the pickup (default) or drop-off entry path (docking mode needed) |
 | `MOSAIC_DOCK_LEAVE T=n MODE=pickup\|dropoff` | Walk out of a dock |
 | `MOSAIC_DOCK_SHOW [T=n]` | Print settings and paths |
 | `MOSAIC_DOCK_SWITCHES` | Print the current reading of the carriage switch and all dock switches |
