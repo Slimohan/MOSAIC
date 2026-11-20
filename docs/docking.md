@@ -188,14 +188,21 @@ Any G-code error makes klipper-toolchanger forget the mounted tool, and during a
 Then:
 
 1. Fix the cause by hand. Seat the tool or put it back in its dock. The console message says what was found. MOSAIC does not carry the tool back over the part itself after a failed check. One move it cannot prevent: klipper-toolchanger moves to the print position at the end of every change (`t_command_restore_axis`, default `XYZ`), and does so also after a failed one. MOSAIC keeps the slow acceleration for that move; a tool that is half coupled still travels with it, so keep a hand near the stop on the first tests.
-2. Run `MOSAIC_RESUME` (or press the button). It reads the switches to find the tool on the carriage (or use `T=<n>` when they cannot tell), repairs the changer, redoes the change to the tool the print wanted, then `RESUME`s and primes the nozzle if a retract was pending. `MOSAIC_RESUME RESUME=0` only repairs the changer.
+2. Run `MOSAIC_RESUME` (or press the button). It reads the switches to find the tool on the carriage (or use `T=<n>` when they cannot tell), repairs the changer, redoes the change to the tool the print wanted, primes the nozzle if a retract was pending (while still paused, so a `prime_macro` may go to a brush: `RESUME` then moves back to the saved position by itself) and `RESUME`s. `MOSAIC_RESUME RESUME=0` only repairs the changer.
 
 **The Resume button.** After a failed change klipper-toolchanger believes the new tool is mounted. A plain `RESUME` (the big button in Mainsail, Fluidd and KlipperScreen) would continue the print with the wrong tool and offsets. Make it refuse until `MOSAIC_RESUME` has repaired the changer:
 
-- Without a `RESUME` macro of your own: include `core/mosaic_resume_guard.cfg` (section 1 of `mosaic.cfg`, a line is in the template).
-- With Mainsail or Fluidd (their client macros already define `[gcode_macro RESUME]`, a second one would not load): put `MOSAIC_RESUME_GUARD` on the first line of that `RESUME` macro.
+- With Mainsail or Fluidd (their client macros define `RESUME`): use their hook. In your `printer.cfg`:
 
-`MOSAIC_CHECK` tells you which of the two is missing. The refusal is an error from a console command only, so it does not end the paused print.
+  ```
+  [gcode_macro _CLIENT_VARIABLE]
+  variable_user_resume_macro: "MOSAIC_RESUME_GUARD"
+  ```
+
+  It runs first in their `RESUME`, before anything moves. This does not touch `mainsail.cfg` (a link into `~/mainsail-config` that is replaced on every update). It is checked in Mainsail's `client.cfg`; Fluidd's client macros have the same variable, but I have not checked where it runs there. Do **not** include `mosaic_resume_guard.cfg` next to them: Klipper does not complain about a second `[gcode_macro RESUME]`, it merges the two and the one read last wins, so the guard would silently replace their whole `RESUME` (or be replaced by it).
+- Without a `RESUME` macro of your own: include `core/mosaic_resume_guard.cfg` (section 1 of `mosaic.cfg`, a line is in the template).
+
+`MOSAIC_CHECK` tells you which of these applies, and warns about the include next to the client macros. The refusal is an error from a console command only, so it does not end the paused print.
 
 **Start macros.** A macro that called the `T` command (your `PRINT_START`) keeps running after the pause. Put `MOSAIC_REQUIRE_TOOL T=<n>` right after the change: it raises an error when the change failed, which stops the start cleanly before the first layer. Then `CANCEL_PRINT`, fix the tool, `MOSAIC_RESUME RESUME=0`.
 
