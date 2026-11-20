@@ -561,6 +561,16 @@ check. The Calibration section has Calibrate all tools, X and Y only, Z only, an
 the Nudge state, the set-up check and the saved offsets. Without `mosaic_tools.cfg` the buttons
 fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`.
 
+**Mainsail opens Mainsail instead of the page.** Mainsail is a progressive web app: once a browser has opened
+Mainsail, Mainsail's service worker answers every page navigation on that address with Mainsail itself (it only lets
+`/access`, `/api`, `/printer`, `/server`, `/websocket` and `/webcam*` through), so `http://<printer>/mosaic/` and the
+sidebar entry show Mainsail in that browser, while a fresh browser or `curl` gets the MOSAIC page. A forced reload
+(Ctrl+Shift+R) gets past it once. The lasting fix is to open the page on an address of its own, where Mainsail's service
+worker does not exist: another host name or port in front of the same `/mosaic/` route. With a reverse proxy, for
+example Traefik, a router for `mosaic.<your domain>` to the printer with an `addPrefix` middleware (`prefix: /mosaic`);
+then point the sidebar entry at it (`href` in `.theme/navi.json`, `"target": "_blank"`). The page itself works under any
+prefix, its calls to Moonraker are relative.
+
 **Locked while printing.** While a print runs or is paused, Mount, Dock, Calibrate and Reload saved offsets are
 switched off on the page, so a tap cannot move the toolhead in the middle of a print. Temperatures, fans and the
 filament still work. The console commands are not locked (`MOSAIC_AUTO_Z_OFFSET` is meant to run in `PRINT_START`).
