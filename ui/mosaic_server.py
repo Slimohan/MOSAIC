@@ -22,6 +22,10 @@
 # that are not archived, for choosing one on the page. Read through Moonraker's
 # [spoolman] component (/server/spoolman/proxy, only GET /v1/spool and
 # GET /v1/spool/<id>), kept 30 s. Without Spoolman nothing changes.
+# The same loop also copies material, name, colour and temperature of a tool's
+# spool into its saved filament (MOSAIC_SET_FILAMENT, only when they differ and
+# not while printing), so the console (MOSAIC_TOOLS_STATUS) and the macros have
+# them too. variable_spoolman: False in _MOSAIC_TOOLS_SETTINGS switches it off.
 #
 # Part of MOSAIC (github.com/Slimohan/MOSAIC), GPL-3.0.
 
@@ -267,11 +271,56 @@ def lane_entries(status, spool=lambda sid: None):
     return want
 
 
+def _clean(v):
+    """A value that can go into a G-code parameter (no quotes, no comment characters)."""
+    return " ".join(str(v or "").replace('"', "").replace("'", "").replace("\\", "")
+                    .replace("#", "").replace(";", "").split())
+
+
+def fill_filaments(moonraker, status):
+    """Copy the values of each tool's Spoolman spool into its saved filament
+    (t<n>_filament) when they differ. Not while printing."""
+    settings = status.get("gcode_macro _MOSAIC_TOOLS_SETTINGS") or {}
+    if str(settings.get("spoolman", True)).lower() in ("false", "0", "no"):
+        return
+    if (status.get("print_stats") or {}).get("state") in ("printing", "paused"):
+        return
+    tc = status.get("toolchanger") or {}
+    variables = (status.get("save_variables") or {}).get("variables") or {}
+    for n in tc.get("tool_numbers") or []:
+        f = variables.get("t%d_filament" % n)
+        if not isinstance(f, dict):
+            continue
+        try:
+            sid = int(f.get("spool_id") or 0)
+        except (TypeError, ValueError):
+            sid = 0
+        s = spool_info(moonraker, sid) if sid > 0 else None
+        if not s:
+            continue
+        mat = _clean(s.get("material")).replace(" ", "-").upper()[:20]
+        name = _clean(" ".join(x for x in (s.get("vendor"), s.get("name")) if x))[:40]
+        color = (s.get("color") or "").upper()
+        try:
+            temp = float(s.get("temp") or 0) or float(f.get("temp") or 0)
+        except (TypeError, ValueError):
+            temp = 0.0
+        same = (str(f.get("material") or "").upper() == mat and str(f.get("name") or "") == name
+                and (not color or str(f.get("color") or "").upper() == color)
+                and abs(float(f.get("temp") or 0) - temp) < 0.5)
+        if same:
+            continue
+        script = 'MOSAIC_SET_FILAMENT T=%d MATERIAL=%s NAME="%s"%s TEMP=%g SPOOL=%d' % (
+            n, mat or '""', name, (" COLOR=" + color) if color else "", temp, sid)
+        _call(moonraker, "POST", "/printer/gcode/script?script=" + urllib.parse.quote(script), {})
+
+
 def sync_once(moonraker, last):
     """One pass: write changed entries, remove MOSAIC's entries that are gone.
     `last` is what this process wrote before; returns the new state."""
-    q = "/printer/objects/query?toolchanger&save_variables&gcode_macro%20_MOSAIC_TOOLS_SETTINGS"
+    q = "/printer/objects/query?toolchanger&save_variables&print_stats=state&gcode_macro%20_MOSAIC_TOOLS_SETTINGS"
     status = _call(moonraker, "GET", q)["result"]["status"]
+    fill_filaments(moonraker, status)
     want = lane_entries(status, lambda sid: spool_info(moonraker, sid))
     if want is None:
         return last
