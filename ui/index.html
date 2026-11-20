@@ -109,6 +109,31 @@
   dialog .grid { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; margin:10px 0; }
   dialog input[type=text] { width:100%; }
   dialog input[type=color] { width:60px; height:32px; padding:0 2px; }
+  /* the Filament dialog */
+  #fdlg { max-width:520px; width:94vw; padding:22px; border-radius:14px; }
+  #fdlg .fdhead { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #fdlg .fdhead b { font-size:17px; }
+  #fdlg .grid { grid-template-columns:110px minmax(0,1fr); gap:14px 16px; margin:18px 0 10px; }
+  #fdlg label { font-size:14px; }
+  #fdlg input[type=text], #fdlg input[type=number] { width:100%; padding:9px 12px; border-radius:8px; }
+  #fdlg .colrow { display:flex; gap:10px; align-items:center; }
+  #fdlg input[type=color] { width:56px; height:40px; border-radius:8px; padding:2px 3px; flex:none; }
+  #fdlg .colhex { font-variant-numeric:tabular-nums; color:var(--mute); font-size:14px; }
+  #fdlg input.ro, #fdlg input:disabled { background:transparent; border-style:dashed; color:var(--fg); opacity:.85; cursor:default; }
+  #fdlg .tempbox { position:relative; max-width:160px; }
+  #fdlg .tempbox span { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--mute); font-size:14px; pointer-events:none; }
+  #fdlg .bar { margin-top:18px; }
+  #fdlg .bar .grow { flex:1; }
+  .fdspool { --sc:#8a9096; display:flex; gap:14px; align-items:center; margin-top:16px; padding:14px; border:1px solid var(--line); border-radius:12px;
+             background:linear-gradient(135deg, color-mix(in srgb, var(--sc) 16%, transparent), transparent 60%), var(--bg); }
+  .fdspool svg { width:48px; height:48px; flex:none; }
+  .fdspool .fdsp-txt { flex:1; min-width:0; }
+  .fdspool .spv { font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fdspool .spn { font-weight:600; line-height:1.25; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .fdspool .spw { font-size:12px; color:var(--mute); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .fdspool .fdsp-btns { display:flex; gap:6px; flex:none; }
+  #fd_ro_note { font-size:12px; color:var(--mute); }
+  @media (max-width:599.98px) { .fdspool { flex-wrap:wrap; } .fdspool .fdsp-btns { width:100%; } .fdspool .fdsp-btns button:first-child { flex:1; } #fdlg { padding:16px; } #fdlg .grid { grid-template-columns:minmax(0,1fr); gap:6px; } #fdlg .grid label { margin-top:8px; } }
   /* the three widths, see Layout above: last, so they win over the rules before */
   @media (max-width:599.98px) {
     #tab_tools { padding:10px; gap:12px; }
@@ -207,19 +232,32 @@
 
 <dialog id="fdlg">
   <form method="dialog">
-    <b id="fd_title">Filament</b>
+    <div class="fdhead"><b id="fd_title">Filament</b></div>
+    <div class="fdspool" id="fd_spool_box">
+      <span id="fd_spool_art"></span>
+      <div class="fdsp-txt">
+        <div class="spv" id="fd_spool_v">Spoolman</div>
+        <div class="spn" id="fd_spool_n">No spool</div>
+        <div class="spw" id="fd_spool_w"></div>
+      </div>
+      <div class="fdsp-btns">
+        <button type="button" id="fd_spool_btn">Choose</button>
+        <button type="button" id="fd_spool_none" title="No spool: the fields can be edited">&times;</button>
+      </div>
+    </div>
     <div class="grid">
       <label for="fd_mat">Material</label><input type="text" id="fd_mat" list="fd_mats" maxlength="20" placeholder="PLA">
       <label for="fd_name">Name</label><input type="text" id="fd_name" maxlength="40" placeholder="Galaxy Blue">
-      <label for="fd_col">Colour</label><input type="color" id="fd_col" value="#808080">
-      <label for="fd_temp">Print temp</label><input type="number" id="fd_temp" min="0" max="500" step="5" placeholder="&deg;C">
-      <label for="fd_spool_btn" id="fd_spool_btn_lab">Spoolman spool</label><span class="spoolpick"><button type="button" id="fd_spool_btn">Choose a spool ...</button><button type="button" id="fd_spool_none" title="No spool">&times;</button></span>
-      <label for="fd_spool" id="fd_spool_lab">Spool id</label><input type="number" id="fd_spool" min="0" max="999999" step="1" placeholder="id, empty = none">
+      <label for="fd_col">Colour</label><div class="colrow"><input type="color" id="fd_col" value="#808080"><span class="colhex" id="fd_colhex">#808080</span></div>
+      <label for="fd_temp">Print temp</label><div class="tempbox"><input type="number" id="fd_temp" min="0" max="500" step="5" placeholder="215"><span>&deg;C</span></div>
+      <label for="fd_spool" id="fd_spool_lab">Spool id</label><input type="number" id="fd_spool" min="0" max="999999" step="1" placeholder="Spoolman id, empty = none">
     </div>
+    <div id="fd_ro_note"></div>
     <datalist id="fd_mats"><option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU</option><option>PC</option><option>PA</option><option>PLA-CF</option><option>PETG-CF</option></datalist>
     <div class="bar">
       <button class="primary" id="fd_save" value="save">Save</button>
-      <button id="fd_clear" value="clear" class="warn">Clear</button>
+      <button id="fd_clear" value="clear" class="warn" title="Forget the filament of this tool">Clear</button>
+      <span class="grow"></span>
       <button value="cancel">Cancel</button>
     </div>
   </form>
@@ -321,13 +359,17 @@ function editFilament(n) {
   fdTool = n; const f = filRaw[n] || {};
   $("fd_title").textContent = "T" + n + " filament";
   $("fd_mat").value = f.material || ""; $("fd_name").value = f.name || "";
-  $("fd_col").value = f.color ? "#" + f.color.toLowerCase() : "#808080";
+  setColour(f.color ? "#" + f.color.toLowerCase() : "#808080");
   $("fd_temp").value = f.temp > 0 ? f.temp : "";
-  $("fd_spool").value = f.spool_id > 0 ? f.spool_id : "";
-  fillSpoolList(f.spool_id > 0 ? Number(f.spool_id) : 0);
+  const cur = f.spool_id > 0 ? Number(f.spool_id) : 0;
+  // a spool already known to the page (the cards read it): show its values at once
+  setSpoolChoice(cur, spools[cur] ? Object.assign({ id: cur }, spools[cur]) : null);
+  fillSpoolList(cur);
   $("fdlg").returnValue = "";
   $("fdlg").showModal();
 }
+function setColour(v) { $("fd_col").value = v; $("fd_colhex").textContent = v.toUpperCase(); }
+$("fd_col").addEventListener("input", () => { $("fd_colhex").textContent = $("fd_col").value.toUpperCase(); });
 // The spools of Spoolman to choose from, as cards (the page server reads them through
 // Moonraker's [spoolman]). Without Spoolman the picker is hidden and the id field is used.
 let spoolList = null;
@@ -338,26 +380,48 @@ function spoolSvg(color) {
     (color ? '' : ' stroke-dasharray="3 3"') + '/><circle cx="20" cy="20" r="11" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1"/>' +
     '<circle cx="20" cy="20" r="6" fill="var(--card)" stroke="#8a9096" stroke-width="2"/></svg>';
 }
-function setSpoolChoice(id) {
+// While the tool has a Spoolman spool, material, name, colour and temperature come from it and
+// cannot be edited here; x (no spool) makes them editable again and removes the spool id.
+function setLocked(on) {
+  ["fd_mat", "fd_name", "fd_temp"].forEach(id => { $(id).readOnly = on; $(id).classList.toggle("ro", on); });
+  $("fd_col").disabled = on;
+  $("fd_ro_note").textContent = on ? "From Spoolman. Remove the spool (\u00d7) to edit the fields." : "";
+}
+function setSpoolChoice(id, s) {
   $("fd_spool").value = id > 0 ? id : "";
-  const s = (spoolList || []).find(x => x.id === id);
-  $("fd_spool_btn").textContent = id > 0 ? (s ? spoolLabel(s) : "#" + id + "  (not in the list)") : "Choose a spool ...";
-  $("fd_spool_btn").title = $("fd_spool_btn").textContent;
+  s = s || (spoolList || []).find(x => x.id === id) || null;
+  const box = $("fd_spool_box");
+  box.style.setProperty("--sc", s && s.color ? "#" + s.color : "#8a9096");
+  $("fd_spool_art").innerHTML = spoolSvg(s ? s.color : "");
+  $("fd_spool_v").textContent = id > 0 ? "Spoolman #" + id + (s && s.vendor ? " \u00b7 " + s.vendor : "") : "Spoolman";
+  $("fd_spool_n").textContent = id > 0 ? (s ? s.name || "(no name)" : "(not in the list)") : "No spool";
+  const left = s && s.remaining_weight > 0 ? Math.round(s.remaining_weight) : 0;
+  const total = s && s.initial_weight > 0 ? Math.round(s.initial_weight) : 0;
+  $("fd_spool_w").textContent = left ? left + " g left" + (total ? " of " + total + " g" : "") : "";
+  $("fd_spool_btn").textContent = id > 0 ? "Change" : "Choose";
+  $("fd_spool_none").classList.toggle("hidden", !(id > 0));
+  if (id > 0 && s) fillFromSpool(s);
+  setLocked(id > 0 && !!s);
+}
+function fillFromSpool(s) {
+  if (s.material) $("fd_mat").value = s.material;
+  $("fd_name").value = [s.vendor, s.name].filter(Boolean).join(" ").slice(0, 40);
+  if (s.color) setColour("#" + s.color.toLowerCase());
+  if (s.temp > 0) $("fd_temp").value = s.temp;
 }
 async function fillSpoolList(cur) {
+  // the picker needs the list of spools; without Spoolman the plain id field is used
   const show = ok => {
-    ["fd_spool_btn_lab"].forEach(id => $(id).classList.toggle("hidden", !ok));
-    $("fd_spool_btn").closest("span").classList.toggle("hidden", !ok);
+    $("fd_spool_box").classList.toggle("hidden", !ok);
     $("fd_spool").classList.toggle("hidden", ok); $("fd_spool_lab").classList.toggle("hidden", ok); };
-  show(!!(spoolList && spoolList.length));
-  setSpoolChoice(cur);
+  show(!!(spoolList && spoolList.length) || !!spools[cur]);
   try {
     const r = await fetch("spools", { cache: "no-store" });
     spoolList = r.ok ? await r.json() : null;
   } catch (e) { spoolList = null; }
   const ok = Array.isArray(spoolList) && spoolList.length > 0;
   show(ok);
-  if (ok) setSpoolChoice(cur);
+  if (ok && Number($("fd_spool").value || 0) === cur) setSpoolChoice(cur);
 }
 function spoolCard(s, cur) {
   const b = document.createElement("button"); b.type = "button";
@@ -402,15 +466,7 @@ function drawSpoolGrid() {
   list.forEach(s => g.appendChild(spoolCard(s, cur)));
   $("sd_note").textContent = list.length + " of " + (spoolList || []).length + " spools";
 }
-function applySpool(s) {
-  setSpoolChoice(s ? s.id : 0);
-  if (!s) return;
-  // the loaded filament is now this spool's: take its values (they can still be changed before saving)
-  if (s.material) $("fd_mat").value = s.material;
-  $("fd_name").value = [s.vendor, s.name].filter(Boolean).join(" ").slice(0, 40);
-  if (s.color) $("fd_col").value = "#" + s.color.toLowerCase();
-  if (s.temp > 0) $("fd_temp").value = s.temp;
-}
+function applySpool(s) { setSpoolChoice(s ? s.id : 0, s); }
 $("fd_spool_btn").onclick = () => {
   $("sd_title").textContent = "T" + fdTool + ": choose a spool";
   $("sd_search").value = ""; drawSpoolGrid(); $("sdlg").showModal(); $("sd_search").focus();
