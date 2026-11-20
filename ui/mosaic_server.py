@@ -46,6 +46,7 @@ ALLOWED = (
     "/printer/gcode/script",
     "/printer/objects/query",
     "/printer/info",
+    "/server/webcams/list",
     "/server/files/metadata",
     "/server/files/list",
 )

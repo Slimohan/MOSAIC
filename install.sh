@@ -5,6 +5,10 @@
 #      and a link core/ -> this download, and adds  [include MOSAIC/mosaic.cfg]
 #      to printer.cfg. Your file is never overwritten. An older install with
 #      numbered files (00_core.cfg ...) is joined into mosaic.cfg.
+#      A new mosaic.cfg is built from the template (config/mosaic.cfg) and two
+#      questions: which calibration method you prefer (Nudge probe or camera;
+#      the other method stays in the file, switched off) and how many tools you
+#      have (the tools, docks and T commands are written for that many).
 #   2. Links the optional Z switch module into Klipper and Kalico.
 #   3. Sets up the MOSAIC page: a service, the page at http://<printer>/mosaic/
 #      through the web server of Mainsail and/or Fluidd, a MOSAIC entry in
@@ -14,6 +18,8 @@
 # Usage: ./install.sh [path to klipper or kalico, ...]   (default: ~/klipper ~/kalico)
 #   CONF=/path/to/config ./install.sh   if your config folder is not ~/printer_data/config
 #   COPY=1 ./install.sh                 to copy the module instead of symlinking it
+#   CALIBRATION=nudge|camera TOOLS=4 ./install.sh   to answer the two questions up front
+#                                       (without a terminal, and without these, you get nudge and 10 tools)
 #   NO_WEB=1 ./install.sh               to skip step 3
 #   NGINX_SITE=/etc/nginx/sites-available/<name> ./install.sh   if your Mainsail or Fluidd site file has another name
 #
@@ -65,7 +71,7 @@ if [ -n "$old" ] && [ ! -e "$dest/mosaic.cfg" ]; then
         echo "# MOSAIC: your configuration. This is the ONE file you edit."
         echo "# Joined from your numbered files by the installer, in the order they loaded."
         echo "# The originals are in the old/ folder next to this file. The current template,"
-        echo "# with the explanations for every section, is in core/config/mosaic.cfg."
+        echo "# with the explanations for every section, is built by:  python3 core/config/build_config.py"
         echo
     } > "$dest/mosaic.cfg"
     for f in $old; do
@@ -75,15 +81,75 @@ if [ -n "$old" ] && [ ! -e "$dest/mosaic.cfg" ]; then
     done
     echo "joined your numbered files into $dest/mosaic.cfg (originals: $dest/old/)"
 fi
+# mosaic.cfg is built from the template with your two answers (a new install only,
+# an existing mosaic.cfg is never touched, and then the questions are not asked).
+build="$here/config/build_config.py"
+ask_number() {   # $1 = the question, $2 = lowest, $3 = highest answer; the answer is in $reply
+    while :; do
+        printf '%s ' "$1"
+        read -r reply || { reply=""; return 1; }
+        case "$reply" in
+            ''|*[!0-9]*) ;;
+            *) if [ "$reply" -ge "$2" ] && [ "$reply" -le "$3" ]; then return 0; fi ;;
+        esac
+        echo "  Please type a number from $2 to $3."
+    done
+}
 if [ ! -e "$dest/mosaic.cfg" ]; then
-    cp "$here/config/mosaic.cfg" "$dest/mosaic.cfg"
-    echo "  created mosaic.cfg - this is the one file you edit"
-elif ! cmp -s "$here/config/mosaic.cfg" "$dest/mosaic.cfg"; then
-    if [ -d "$dest/old" ] && grep -q "^# Joined from your numbered files" "$dest/mosaic.cfg"; then
-        :   # a joined file always differs from the template, nothing to compare
+    command -v python3 >/dev/null 2>&1 || { echo "python3 is needed to build mosaic.cfg"; exit 1; }
+    calibration="$CALIBRATION"
+    tools="$TOOLS"
+    case "$calibration" in
+        1|[Nn]udge) calibration=nudge ;;
+        2|[Cc]amera|[Vv]isual) calibration=camera ;;
+        '') ;;
+        *) echo "CALIBRATION must be nudge or camera"; exit 1 ;;
+    esac
+    case "$tools" in
+        '') ;;
+        *[!0-9]*) echo "TOOLS must be a number from 1 to 10"; exit 1 ;;
+        *) if [ "$tools" -lt 1 ] || [ "$tools" -gt 10 ]; then echo "TOOLS must be a number from 1 to 10"; exit 1; fi ;;
+    esac
+    if [ -z "$calibration" ]; then
+        if [ -t 0 ]; then
+            echo
+            ask_number "Which calibration method do you prefer, Nudge or Visual? 1 for Nudge 2 for Camera" 1 2 || reply=1
+            [ "$reply" = 2 ] && calibration=camera || calibration=nudge
+        else
+            calibration=nudge
+            echo "no terminal: calibration method nudge (CALIBRATION=camera chooses the camera method)"
+        fi
+    fi
+    if [ -z "$tools" ]; then
+        if [ -t 0 ]; then
+            ask_number "How many tools are you using? 1-10" 1 10 || reply=10
+            tools=$reply
+        else
+            tools=10
+            echo "no terminal: 10 tools (TOOLS=4 for four tools)"
+        fi
+    fi
+    python3 "$build" --calibration "$calibration" --tools "$tools" -o "$dest/mosaic.cfg"
+    echo "  created mosaic.cfg for $tools tool(s), calibration method $calibration - this is the one file you edit"
+elif grep -q "^# Joined from your numbered files" "$dest/mosaic.cfg" && [ -d "$dest/old" ]; then
+    :   # a joined file always differs from the template, nothing to compare
+elif command -v python3 >/dev/null 2>&1; then
+    # the current template, built the way this mosaic.cfg was built, for you to compare
+    rec=$(python3 "$build" --record-of "$dest/mosaic.cfg")
+    if [ -n "$rec" ]; then
+        calibration=${rec% *}
+        tools=${rec#* }
     else
-        cp "$here/config/mosaic.cfg" "$dest/mosaic.cfg.new"
-        echo "  kept your mosaic.cfg (the current template is saved as mosaic.cfg.new)"
+        calibration=nudge     # a mosaic.cfg from before the installer built it: the old, full template
+        tools=10
+    fi
+    newtmp=$(mktemp)
+    python3 "$build" --calibration "$calibration" --tools "$tools" -o "$newtmp"
+    if cmp -s "$newtmp" "$dest/mosaic.cfg"; then
+        rm -f "$newtmp"
+    else
+        mv "$newtmp" "$dest/mosaic.cfg.new"
+        echo "  kept your mosaic.cfg (the current template, built for $tools tool(s) and the $calibration method, is saved as mosaic.cfg.new)"
     fi
 fi
 # the one line in printer.cfg
