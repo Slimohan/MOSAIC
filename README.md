@@ -6,13 +6,18 @@
 
 One package for the tools of a tool changer on Klipper and Kalico: calibration, tool control and docking.
 Every nozzle touches a small probe, the macros turn the touch points into the X, Y and Z offsets of each tool,
-and you do nothing in between. The same package gives you the `T0` ... `T9` commands, the dock pick-up and
-drop-off moves, and one web page to control it all.
+and you do nothing in between. Prefer to align by eye? The installer also offers a camera method. The same package
+gives you the `T0` ... `T9` commands, the dock pick-up and drop-off moves, and one web page to control it all.
 
 It works with any tool changer that runs on **klipper-toolchanger** (Viesturz), such as MadMax (Zruncho), on
 stock Klipper or Kalico. It does not depend on MadMax itself, only on klipper-toolchanger's tools and tool parameters.
 
-- **XY and Z, automatic:** a [Nudge](https://github.com/zruncho3d/nudge) probe (a mechanical contact probe,
+- **Two calibration methods, you choose at the installation** (the other stays in your config, switched off, in
+  case you change your mind):
+  1. **Nudge**, automatic (below).
+  2. **Camera** (visual): a camera looks up at the nozzle; you centre every nozzle in the crosshair on the Alignment
+     tab of the web page and the macros turn that into the X and Y offsets. Z is measured with the Z switch.
+- **Nudge: XY and Z, automatic:** a [Nudge](https://github.com/zruncho3d/nudge) probe (a mechanical contact probe,
   about 10 dollars) sits on the bed. `MOSAIC_CALIBRATE` mounts every tool in turn, touches the Nudge from four
   sides and from above, and saves the offsets. The probing itself is klipper-toolchanger's `[tools_calibrate]`
   module; MOSAIC runs it for all tools, adds up the offsets and saves them.
@@ -50,13 +55,14 @@ made-up demo data, not a real machine.
 
 | File | What it does |
 |---|---|
-| `mosaic.cfg` | The calibration macros. |
+| `mosaic.cfg` | The calibration macros (the Nudge method, and the Z measurement with the switch). |
+| `mosaic_camera.cfg` | Optional, for the camera method. The alignment session: `MOSAIC_START`, `MOSAIC_MOVE`, `MOSAIC_SET_TOOL`, `MOSAIC_LOAD_TOOL`, `MOSAIC_END`. |
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. It loads `mosaic_tools_core.cfg` (everything but the T commands) and `t_commands/T0.cfg` ... `T9.cfg`; load those two yourself to get only the T commands of your tools. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
 | `mosaic_resume_guard.cfg` | Optional. Makes `RESUME` refuse after a failed tool change until `MOSAIC_RESUME` has repaired the changer. |
 | `mosaic_shared_extruder.cfg` | Optional. For a hotend swapper with one shared extruder motor: makes `SET_PRESSURE_ADVANCE` act on that motor. |
-| `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools and their hardware, switches, dock positions. `install.sh` copies it once. |
+| `config/` | The template of your `MOSAIC/mosaic.cfg` (settings, MOSAIC's probes, tools and their hardware, switches, dock positions) and `build_config.py`, which `install.sh` uses to build your file from it. |
 | `docs/` | Hardware examples, the docking guide, and examples of dock layouts. |
 | `klippy_extras/mosaic_z_probe.py` | Optional Klipper module for the separate Z switch. Works next to Beacon, Cartographer or any probe. |
 | `ui/` | The web page (heaters, fans, mount, dock, offsets, calibration), its server, and the files `install.sh` uses to add it to Mainsail or Fluidd. |
@@ -72,10 +78,11 @@ made-up demo data, not a real machine.
   For the default offset method you need klipper-toolchanger **2025.12.26 or newer**
   (offsets as the tool parameters `gcode_x_offset`, `gcode_y_offset`, `gcode_z_offset`).
 - A `[save_variables]` section.
-- A **Nudge probe** on the bed, wired to a free endstop pin. Every nozzle must be able to reach it, and it must
-  sit rigid: bolted to the bed frame or the printer, not on a flexing plate.
-  Nudge needs about 6 mm of overtravel for the pin to wobble.
-- Optional: a switch for Z.
+- For the **Nudge method**: a **Nudge probe** on the bed, wired to a free endstop pin. Every nozzle must be able to
+  reach it, and it must sit rigid: bolted to the bed frame or the printer, not on a flexing plate.
+  Nudge needs about 6 mm of overtravel for the pin to wobble. A switch for Z is optional.
+- For the **camera method**: a camera that looks up at the nozzle path (a webcam known to Moonraker, so that the
+  Alignment tab can show it), an optional LED ring, and a switch for Z (see "Setup, once, camera method").
 - For the web page and the update panel: Moonraker with Mainsail or Fluidd (the standard KIAUH, MainsailOS or FluiddPi
   setup), and `sudo` rights for the installer. The sidebar entry is Mainsail only; Fluidd users bookmark the page.
 
@@ -105,7 +112,20 @@ cd MOSAIC
 ./install.sh
 ```
 
-It does three things:
+It asks two questions first (only on a new install; it never asks again, and never touches an existing `mosaic.cfg`):
+
+```
+Which calibration method do you prefer, Nudge or Visual? 1 for Nudge 2 for Camera
+How many tools are you using? 1-8
+```
+
+The answers decide what your `mosaic.cfg` looks like. The method you pick is switched on; the other one is in the file
+too, switched off, so you can change later (see "Changing the calibration method"). The tools, dock switches and dock
+sections and the T commands (so that Mainsail shows exactly your tool buttons) are written for as many tools as you
+gave. To skip the questions: `CALIBRATION=nudge|camera TOOLS=4 ./install.sh`. Without a terminal and without those
+variables you get the Nudge method and ten tools.
+
+It then does three things:
 
 - **Creates your MOSAIC folder** (`~/printer_data/config/MOSAIC`) with your `mosaic.cfg`, and adds
   `[include MOSAIC/mosaic.cfg]` at the top of `printer.cfg` (a backup is kept as `printer.cfg.mosaic-backup`). It never
@@ -146,8 +166,8 @@ MOSAIC/
 `mosaic.cfg` has seven sections, from top to bottom:
 
 1. **What to load**: MOSAIC itself; switch optional parts on or off here
-2. **Settings**: at least the Nudge position
-3. **MOSAIC's probes**: the Nudge probe, the optional Z switch, `[save_variables]`
+2. **Settings**: at least the Nudge position (camera method: the camera position and focus height)
+3. **MOSAIC's probes**: the Nudge probe (camera method: the optional LED), the Z switch, `[save_variables]`
 4. **Toolchanger**: the `[toolchanger]` section with the dock hooks
 5. **Tools**: the hardware of your tools (heaters, fans, motor) and one `[tool Tn]` per tool
 6. **Switches**: your carriage and dock switches, or just their names if they live in your board file (optional)
@@ -172,32 +192,32 @@ is up to you:
 Examples, including complete board files: [docs/hardware.md](docs/hardware.md). Only `mosaic.cfg` is loaded from the
 `MOSAIC` folder, so leftover copies and old files there do no harm.
 
-**How many T commands (Mainsail's tool buttons):** section 1 loads `core/mosaic_tools.cfg`, which brings all ten tool
-commands `T0` ... `T9`. Mainsail shows a button for every T command, so with fewer tools change that one line into
-two, with the range of your tools:
+**How many T commands (Mainsail's tool buttons):** Mainsail shows a button for every T command, so the installer
+loads only the T commands of your tools. With four tools, section 1 has:
 
 ```
-#[include core/mosaic_tools.cfg]
 [include core/mosaic_tools_core.cfg]
-[include core/t_commands/T[0-4].cfg]
+[include core/t_commands/T[0-3].cfg]
 ```
 
-| Tools | Second line |
-|---|---|
-| T0, T1 | `[include core/t_commands/T[0-1].cfg]` |
-| T0 ... T2 | `[include core/t_commands/T[0-2].cfg]` |
-| T0 ... T4 | `[include core/t_commands/T[0-4].cfg]` |
-| T0 ... T9 | `[include core/t_commands/T*.cfg]` (the same as the old line) |
-| other numbers, e.g. T0, T1, T5 | one line each: `[include core/t_commands/T0.cfg]`, `.../T1.cfg`, `.../T5.cfg` |
-
-Both lines stay above section 5: the T commands must load before the tools. `MOSAIC_CHECK` lists T commands without a
-tool, and fails if a tool has no MOSAIC T command. When you add a tool later, widen the range.
+(`T[0-3]` means T0 to T3; with ten tools the one line `[include core/mosaic_tools.cfg]` loads all of them.) Both lines
+stay above section 5: the T commands must load before the tools. `MOSAIC_CHECK` lists T commands without a tool, and
+fails if a tool has no MOSAIC T command. **When you add a tool later**, copy the last `[tool Tn]`, dock switch and dock
+section in your `mosaic.cfg`, change the numbers (up to T9), and widen the range in the include line.
 
 **Taking a tool out:** put a hash sign in front of its `[tool Tn]` section in section 5 (and, if you defined it
 there, its heater and fans, and its dock switch in section 6). Its saved offsets and filament stay saved.
 
 **Updates** never touch `mosaic.cfg`. If the template changes, the new one is saved beside yours as `mosaic.cfg.new`,
-so you can see what is new and copy it over.
+built for the same method and number of tools as yours (the first line of your file records them), so you can see
+what is new and copy it over.
+
+**Changing the calibration method.** Both methods are in `mosaic.cfg`. Each has blocks in sections 1, 2 and 3 that start
+with a banner such as `------ CAMERA calibration: OFF ... ------` and end with `------ end of CAMERA calibration ------`.
+To switch: in the block that is ON, put a hash sign in front of every line; in the block that is OFF, remove ONE hash
+sign from the start of every line (most editors do this with "toggle comment" on the selected lines). Do it for all
+blocks of both methods, set the pins and positions of the method you switched on, and restart Klipper.
+`MOSAIC_CHECK` says which method is active and what is missing.
 
 **Coming from an older install** (the numbered `00_core.cfg` ... `90_settings.cfg` files)? The installer joins them
 into one `mosaic.cfg` for you (in the same order they used to load) and moves the old files into `MOSAIC/old/`.
@@ -221,6 +241,31 @@ section 2 the new settings (`motor`, `retract`, `pause_on_error`, `auto_init`, `
 `accel_fast` and `accel_slow`, and for printers whose bed moves in Z or whose docks need other paths `z_mode`, `pickup_in` /
 `dropoff_in`, `lane_guard`, `travel_accel` and `prime_before_restore` (all off or unchanged by default, see
 [docs/docking.md](docs/docking.md)). A printer with `[pause_resume]` in `printer.cfg` gets the pause on a failed tool change.
+
+## Setup, once, camera method
+
+(For the Nudge method skip to "Setup, once".) The camera looks up at the nozzle path from a fixed place on the bed
+frame; every nozzle is moved over it and centred in a crosshair.
+
+1. **Camera.** Add it to Moonraker as a webcam (a name with `mosaic`, `nozzle`, `vaoc` or `under` in it is chosen
+   by the Alignment tab, otherwise the first webcam; or type its address on the tab). An optional LED ring around the
+   lens (`[neopixel mosaic_led]`, section 3) is switched on during the alignment.
+2. **Z switch.** Add `[mosaic_z_probe]` in section 3 (a plain switch that every nozzle presses from above, next to the
+   camera) and set `z_switch_x` / `z_switch_y` in section 2: where the nozzle of the reference tool hangs above the
+   middle of the switch. Without it only X and Y are aligned.
+3. **Position.** In section 2, `camera_x`, `camera_y` and `focus_z` (in `_MOSAIC_CAMERA_SETTINGS`) are where the first
+   alignment starts: the camera centre, and the height at which the nozzle tip is in focus. They only need to be
+   roughly right. The exact position is saved with the reference tool.
+4. **Align.** Home, then **Start** on the Alignment tab (or `MOSAIC_START`): the reference tool (T0) moves over the
+   camera. Centre the nozzle in the crosshair with the arrow pad (`MOSAIC_MOVE X= Y= Z=`, at most 2 mm in XY and 1 mm
+   in Z per step; the page can also move to a point you click, with *pixels per mm* set) and save it (**Nozzle is
+   centred**, `MOSAIC_SET_TOOL`): this is the camera reference. Then pick every other tool (**T1** ...,
+   `MOSAIC_LOAD_TOOL T=1`), centre it and save it: its X and Y offsets are the distance from the reference.
+   **End** (`MOSAIC_END`) puts the reference tool back and switches the LED off.
+5. **Z.** `MOSAIC_CALIBRATE_Z` (the Z only button): every nozzle presses the Z switch.
+
+`MOSAIC_CALIBRATE` itself refuses with the camera method (it would need the Nudge); it points you to the
+alignment. During an alignment session `MOSAIC_CALIBRATE_Z` waits until `MOSAIC_END`.
 
 ## Setup, once
 
@@ -514,6 +559,7 @@ A sensible first test order on the printer: `G28`, `SELECT_TOOL T=0`, `SELECT_TO
 | `MOSAIC_CALIBRATE_XY`, `MOSAIC_CALIBRATE_Z` | Shortcuts for `XY=1 Z=0` and `XY=0 Z=1`. |
 | `MOSAIC_AUTO_Z_OFFSET [TEMP=]` | Same as `MOSAIC_CALIBRATE_Z`, meant for `PRINT_START` after homing. |
 | `MOSAIC_NUDGE_QUERY` | Is the Nudge probe triggered? For testing the wiring. |
+| `MOSAIC_START [RESET=1]`, `MOSAIC_LOAD_TOOL T=n`, `MOSAIC_MOVE X= Y= Z=`, `MOSAIC_SET_TOOL`, `MOSAIC_END` | The camera alignment (camera method only): start with the reference tool over the camera, mount another tool over it, a small move to centre the nozzle, save the centred tool (the reference tool: the camera position, others: their X and Y offsets), finish. `RESET=1` zeroes the offsets of the other tools first. Not during a print. |
 | `MOSAIC_ECHO_OFFSETS`, `MOSAIC_RESET_OFFSETS [T=]`, `MOSAIC_APPLY_OFFSETS`, `MOSAIC_CHECK` | Utilities. `MOSAIC_CHECK` also checks the heater of every tool, that `T0` ... `T9` are the MOSAIC macros, warns about tools without `pickup_gcode` or `dropoff_gcode`, and runs `MOSAIC_DOCK_CHECK` when docking is included. |
 | `MOSAIC_DOCK_PICKUP`, `MOSAIC_DOCK_DROPOFF`, `MOSAIC_DOCK_TEACH`, `MOSAIC_DOCK_GOTO`, ... | Docking, see the command list in [docs/docking.md](docs/docking.md#commands). |
 | `MOSAIC_Z_QUERY`, `MOSAIC_Z_PROBE`, `MOSAIC_Z_PROBE_ACCURACY` | The Z switch module (only with `[mosaic_z_probe]`). Use the last one to check its repeatability. |
@@ -604,7 +650,10 @@ switch it off, the temperature buttons, a fan slider, the saved offsets, and Mou
 also shows the loaded filament and has a **Filament** button to change it. The bar on top has All heaters off
 and the tool list. Below the calibration and offsets come the tool change log and, during a print, the filament
 check. The Calibration section has Calibrate all tools, X and Y only, Z only, an optional temperature,
-the Nudge state, the set-up check and the saved offsets. Without `mosaic_tools.cfg` the buttons
+the Nudge state, the set-up check and the saved offsets. With the camera method there is a second tab,
+**Alignment**: the camera picture with a crosshair, Start / End, the tool buttons, the arrow pad (also the arrow
+keys and Page up / Page down), Nozzle is centred, and the offsets; the Calibration section then offers only Z only,
+and the Calibrate button of a card is **Align**. Without `mosaic_tools.cfg` the buttons
 fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`.
 
 **Mainsail opens Mainsail instead of the page.** Mainsail is a progressive web app: once a browser has opened
@@ -693,6 +742,8 @@ with none of the new settings, and with `z_mode: 'absolute'`, pickup, drop-off, 
 bed-Z changer were compared step by step with its own tool change macros. On that printer (Klipper, the real klipper-toolchanger,
 real switches) the configuration loads, `MOSAIC_CHECK` is clean and the `DRY=1` plans are right, and `install.sh` was run on its
 Pi (which showed the service name bug that is fixed now). Its real dock moves have not been run yet.
+
+The camera method and the installer questions were tested like the rest: in batch mode on Klipper v0.14.0, Klipper v0.13 and Kalico, with the real klipper-toolchanger. The alignment session (`MOSAIC_START`, `MOSAIC_MOVE` with its limits, `MOSAIC_SET_TOOL` for the reference tool and the others, `MOSAIC_LOAD_TOOL`, `MOSAIC_END`) was run with both offset methods, `MOSAIC_CALIBRATE` and `MOSAIC_CALIBRATE_Z` were checked for their refusals and, with a stand-in switch, for the Z offsets next to saved X and Y offsets, and `MOSAIC_CHECK` for both methods. `config/build_config.py` was run for both methods and one to eight tools, and every result loaded and passed `MOSAIC_CHECK` with exactly as many T commands as tools. The installer's two questions were answered through a terminal session (wrong answers included), and the `.new` file, an existing `mosaic.cfg` and a scripted install were tried. The Alignment tab was opened in a headless browser against a fake Moonraker. Not tried: a real camera, a real webcam stream, the LED ring, the click-to-centre scale, and the installer on a real Pi.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
