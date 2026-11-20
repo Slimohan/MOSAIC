@@ -183,17 +183,25 @@ The default `0,-25,0/0,-5,0` means: stand 25 mm in front of the dock (lower Y), 
 
 ## When a change fails during a print
 
-Any G-code error makes klipper-toolchanger forget the mounted tool, and during a print an error in a macro also ends the print (Klipper's `virtual_sdcard` cancels it). To give you the chance to fix a tool by hand, MOSAIC does not raise errors from its own checks while a print runs inside a `T0` ... `T9` change. It records the failure, skips what is left of the docking, makes the carriage lift to a clear height and go back to the print position, and then **pauses the print** (`PAUSE`, a prompt with a *Recover and resume* button, a message in the console, and a call to `variable_error_notify` if you set one, for a message to your phone).
+Any G-code error makes klipper-toolchanger forget the mounted tool, and during a print an error in a macro also ends the print (Klipper's `virtual_sdcard` cancels it). To give you the chance to fix a tool by hand, MOSAIC does not raise errors from its own checks while a print runs inside a `T0` ... `T9` change. It records the failure, skips what is left of the docking, lifts the carriage to a clear height (slowly) and then **pauses the print** (`PAUSE`, a prompt with a *Recover and resume* button, a message in the console, and a call to `variable_error_notify` if you set one, for a message to your phone).
 
 Then:
 
-1. Fix the cause by hand. Seat the tool or put it back in its dock. The console message says what was found.
+1. Fix the cause by hand. Seat the tool or put it back in its dock. The console message says what was found. MOSAIC does not carry the tool back over the part itself after a failed check. One move it cannot prevent: klipper-toolchanger moves to the print position at the end of every change (`t_command_restore_axis`, default `XYZ`), and does so also after a failed one. MOSAIC keeps the slow acceleration for that move; a tool that is half coupled still travels with it, so keep a hand near the stop on the first tests.
 2. Run `MOSAIC_RESUME` (or press the button). It reads the switches to find the tool on the carriage (or use `T=<n>` when they cannot tell), repairs the changer, redoes the change to the tool the print wanted, then `RESUME`s and primes the nozzle if a retract was pending. `MOSAIC_RESUME RESUME=0` only repairs the changer.
+
+**The Resume button.** After a failed change klipper-toolchanger believes the new tool is mounted. A plain `RESUME` (the big button in Mainsail, Fluidd and KlipperScreen) would continue the print with the wrong tool and offsets. Make it refuse until `MOSAIC_RESUME` has repaired the changer:
+
+- Without a `RESUME` macro of your own: include `core/mosaic_resume_guard.cfg` (section 1 of `mosaic.cfg`, a line is in the template).
+- With Mainsail or Fluidd (their client macros already define `[gcode_macro RESUME]`, a second one would not load): put `MOSAIC_RESUME_GUARD` on the first line of that `RESUME` macro.
+
+`MOSAIC_CHECK` tells you which of the two is missing. The refusal is an error from a console command only, so it does not end the paused print.
+
+**Start macros.** A macro that called the `T` command (your `PRINT_START`) keeps running after the pause. Put `MOSAIC_REQUIRE_TOOL T=<n>` right after the change: it raises an error when the change failed, which stops the start cleanly before the first layer. Then `CANCEL_PRINT`, fix the tool, `MOSAIC_RESUME RESUME=0`.
 
 This needs `[pause_resume]` in `printer.cfg` and `variable_pause_on_error: True` (the default). Set `error_gcode: MOSAIC_TOOLCHANGE_ERROR` in `[toolchanger]` (the template does) so the failures that klipper-toolchanger finds itself are reported the same way. Honest limits:
 
 - Only changes started by the `T0` ... `T9` commands are covered. A `SELECT_TOOL` typed by hand or called by another macro still raises a normal error.
-- A macro that called the `T` command (your `PRINT_START`, say) carries on after the pause. Check `printer.toolchanger.status` after the change, or leave the changes during the start to the slicer.
 - After a "no tool on the carriage" failure the changer cannot be repaired without a seated tool: seat one, or run `FIRMWARE_RESTART`.
 - Outside a print, or with `pause_on_error: False`, a failure is a plain error as before.
 

@@ -54,6 +54,7 @@ made-up demo data, not a real machine.
 | `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
+| `mosaic_resume_guard.cfg` | Optional. Makes `RESUME` refuse after a failed tool change until `MOSAIC_RESUME` has repaired the changer. |
 | `mosaic_shared_extruder.cfg` | Optional. For a hotend swapper with one shared extruder motor: makes `SET_PRESSURE_ADVANCE` act on that motor. |
 | `config/` | The template of your `MOSAIC/mosaic.cfg`: settings, MOSAIC's probes, tools and their hardware, switches, dock positions. `install.sh` copies it once. |
 | `docs/` | Hardware examples, the docking guide, and examples of dock layouts. |
@@ -313,11 +314,14 @@ first. If a `[tool Tn]` section is left in `printer.cfg` above the include line,
 | `T0` ... `T9` | Mount the tool (`SELECT_TOOL`), apply its saved offset in `gcode_offset` mode, and run the standby handling. Does nothing when that tool is already mounted. An unconfigured tool prints a warning; it does not raise an error, because any G-code error makes klipper-toolchanger forget the mounted tool. |
 | `MOSAIC_SET_TEMP [T=] TARGET= [WAIT=1]` | Set the temperature of a tool (default: the mounted one). |
 | `MOSAIC_TOOL_STANDBY [T=]` | Set the tool to `standby_temp` and remember its temperature. |
-| `MOSAIC_TOOLS_OFF` | All tool heaters off. |
+| `MOSAIC_TOOLS_OFF [RETRACT=1]` | All tool heaters off. `RETRACT=1` first pulls the filament of the mounted tool back (shared extruder), for the end of a print. |
 | `MOSAIC_TOOLS_STATUS` | One console line per tool: mounted or docked, temperature, target, filament. |
 | `MOSAIC_SET_FILAMENT [T=] MATERIAL= NAME= COLOR= TEMP= [SPOOL=] [CLEAR=1]` | The filament loaded in a tool, see "Filament per tool". |
 | `MOSAIC_RETRACT [T=]`, `MOSAIC_PRIME [T=]` | Shared extruder: pull the filament of a tool back / push it forward, see `docs/hardware.md`. Normally the changer hooks do it. |
 | `MOSAIC_RESUME [T=]` | After a failed tool change during a print (the print is paused): fix the tool by hand, run this. See `docs/docking.md`. |
+| `MOSAIC_REQUIRE_TOOL [T=]` | For `PRINT_START`: an error unless the tool is mounted and the changer is fine. |
+| `MOSAIC_RESUME_GUARD` | First line of your own `RESUME` macro: refuses while a failed change is not repaired. |
+| `MOSAIC_PRIMED_RESET` | Start of `PRINT_START`: every tool gets its first prime again (`first_prime`). |
 | `MOSAIC_TOOL_LOG [RESET=1]` | The last tool changes with their time and result. |
 
 `_MOSAIC_TOOLS_SETTINGS` has the settings `standby_mode`, `standby_temp`, `wait_on_select` and `presets`. With `standby_mode: 'off'`
@@ -619,6 +623,8 @@ the mounted tool found at startup, `MOSAIC_Z_REFERENCE`, Spoolman, `RUNS=`, `SAV
 were run in the same batch mode on Klipper and on Kalico, with simulated switches, a simulated print state and a stand-in
 for the Nudge, and with a three tool config in both shared extruder layouts. Older `mosaic.cfg` files without the new
 settings were run again and behave as before.
+
+The second review's changes (pausing in place, the guarded `RESUME`, saved retracts, `MOSAIC_REQUIRE_TOOL`, the prime macro with the first prime, the `M109` window) were run the same way. That review also found a stray quote that made every calibration stop with "Malformed command"; the batch tests had printed that warning and I had filtered it out. The test run now fails on any malformed or unknown command, and on Kalico it showed that calibration read result keys that Kalico's own `tools_calibrate` does not provide (fixed: it reads `last_result`).
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
