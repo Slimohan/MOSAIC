@@ -75,12 +75,16 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `restore_move` | `1` = after the change go back to the print position safely (sideways at safe height first, then down) |
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
-| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part, for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part. `lift`: up to `safe_z` when lower before the dock moves, back to the print Z after, the dock steps have no Z. `keep` and `lift` are for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `lift_min` | `z_mode: lift` only: go at least this many mm above the print Z before the dock moves (default 0 = only `safe_z`). |
+| `travel_accel` | Acceleration of the lift to `safe_z` and of the way back to the print: `fast` (default, `accel_fast`), `slow`, `print` (the acceleration the print had) or mm/s². |
+| `prime_before_restore` | `1` = after a pickup that is followed by a first prime (`first_prime` with a `prime_macro`), the way back to the print waits until after the prime, so the `prime_macro` goes from the dock straight to its brush. It can call `MOSAIC_DOCK_RESTORE_PENDING` when it is done at the brush (before it pushes the retract back); otherwise MOSAIC goes back after the prime. `0` (default) = back to the print first. |
+| `lane_guard` | `1` = a carriage that is between the first entry step and the docks goes straight out to the line of that step first, then sideways. For `keep` / `lift`, where the paths are the only clearance. `0` (default) = straight to the first step. |
 | `approach` | Default entry path for all docks, see [Paths](#paths) |
 | `pickup_in`, `dropoff_in` | Own entry path for a pickup and for a drop-off. Empty means: use `approach`. |
 | `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the entry path of the same action backwards. |
 
-**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z` (not used with `z_mode: keep`), and optional own `approach`, `pickup_in`, `dropoff_in`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
+**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z` (not used with `z_mode: keep` or `lift`), and optional own `approach`, `pickup_in`, `dropoff_in`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
 
 ### Teach a dock
 
@@ -171,7 +175,7 @@ dx,dy,dz[,speed[,v[,accel]]]
 ```
 
 - `speed` in mm/s, empty = the default for that kind of move.
-- `accel` in mm/s², or `fast` / `slow` (the `accel_fast` / `accel_slow` settings). Empty = `fast` on the approach and `slow` on the way out of the dock. It needs `accel_fast` / `accel_slow` to be set, or a number.
+- `accel` in mm/s², or `fast` / `slow` (the `accel_fast` / `accel_slow` settings), or `print` (the acceleration the print had). Empty = `fast` on the approach and `slow` on the way out of the dock. It needs `accel_fast` / `accel_slow` to be set, or a number.
 - `v` in a pickup exit path: check right after that step that the carriage switch shows a tool. Without a carriage switch it runs `VERIFY_TOOL_DETECTED` instead, which does nothing when the tools have no detection pin.
 - The last move of an entry path goes to the dock position itself, you do not write it.
 - The **first entry step must be in free space** where the carriage can come down from `safe_z` (with `z_mode: keep`: where it can travel to from the print).
@@ -194,13 +198,58 @@ in part 1 of section 7. Then **no dock move has a Z part**: the macros do not go
 - `park_z`, `safe_z` and the third number (`dz`) of every step are ignored and not range-checked. Keep writing `0` for `dz`, the step format does not change.
 - `MOSAIC_DOCK_TEACH` does not store a `park_z`, `MOSAIC_DOCK_FILL` ignores `DZ`.
 - After a failed check (see below) there is no slow lift to `safe_z` either: the carriage stays where it is.
-- All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it.
+- All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it. `variable_lane_guard: 1` does the first half for you: a carriage that is between the lane and the docks (a print near the dock edge of the bed) first goes straight out to the lane, then along it.
+
+If the bed must first drop away from the docks or the tools (low layers on a printer whose bed edge or print would come too close to the hanging tool), use
+
+```
+variable_z_mode: 'lift'
+```
+
+instead. Before the dock moves Z goes up to `safe_z` when it is lower (the bed goes down; above `safe_z` nothing moves), the dock steps have no Z part, and at the end Z goes back to the print Z after X and Y, the same order as on a toolhead-Z printer. As with `keep`, `park_z` and `dz` are not used and `MOSAIC_DOCK_TEACH` stores no `park_z`; `safe_z` is range-checked. After a failed check the carriage is lifted to `safe_z` slowly, like with `absolute`.
+
+Above `safe_z` (high layers) `lift` does not move Z, so the way back to the print comes in sideways at the print Z (plus the slicer's Z hop). On a prime tower that is where the nozzle may meet what is left on its edge. `variable_lift_min: 2` lifts at least 2 mm above the print Z before the dock moves (taken from the Z the change goes back to, so a drop-off followed by a pickup lifts once), and the way back then comes in 2 mm above the print and goes down straight.
+
+Two more settings help on such printers, both off by default:
+
+- `variable_lane_guard: 1` (see above) for prints near the dock edge of the bed.
+- `variable_prime_before_restore: 1` if your `prime_macro` primes over a brush on the first use of a tool (`first_prime`). Without it a pickup first goes back to the print, then the prime macro travels to the brush and back again. With it the pickup leaves the carriage at the dock lane, the prime macro goes from there to the brush, and the way back to the print follows the prime. A prime macro that wants to push the toolchange retract back at the print position calls `MOSAIC_DOCK_RESTORE_PENDING` after the wipe and pushes afterwards:
+
+  ```
+  [gcode_macro MY_BRUSH_PRIME]
+  gcode:
+      {% set ts = printer["gcode_macro _MOSAIC_TOOLS_SETTINGS"] %}
+      {% set length = params.LENGTH|float %}
+      SAVE_GCODE_STATE NAME=my_prime
+      G90
+      M83
+      {% if length <= ts.retract|float + 0.01 %}
+          # an ordinary change: only the retract, pushed back where the nozzle is
+          G1 E{length} F{ts.unretract_speed|float * 60}
+      {% else %}
+          # first use: to the brush, prime, retract, wipe, back, push the retract back
+          G1 X... Y... F12000
+          G1 E{length} F{params.SPEED|float * 60}
+          G1 E-{ts.retract|float} F{ts.retract_speed|float * 60}
+          # ... wipe moves ...
+          MOSAIC_DOCK_RESTORE_PENDING
+          G90
+          M83
+          G1 E{ts.retract|float} F{ts.unretract_speed|float * 60}
+      {% endif %}
+      RESTORE_GCODE_STATE NAME=my_prime MOVE=0
+  ```
+
+  `MOSAIC_PRIME` calls the macro for every change that has a retract to push back, so the first branch keeps the ordinary changes at the print position. If the macro does not call `MOSAIC_DOCK_RESTORE_PENDING` (or the prime is skipped because the nozzle is cold), MOSAIC goes back after the prime. MOSAIC waits for the nozzle temperature (`prime_wait`) before it calls the macro, i.e. at the dock lane in this case.
+
 - klipper-toolchanger's own `t_command_restore_axis` defaults to `XYZ`. With `keep` the Z it restores is the Z it already has, so nothing should move, but `XY` says what you mean. I have not tried this on a real printer.
 - `z_mode` only changes the **dock** moves. `MOSAIC_CALIBRATE` and the Z probing of the tool offsets still move the nozzle in Z the way a toolhead-Z printer does, so they are not set up for a bed-Z printer yet.
 
 ## Speed and acceleration
 
 `accel_fast` and `accel_slow` (section 7 of `mosaic.cfg`, mm/s², 0 = do not touch) set the acceleration of the dock moves, the way fast Voron toolchanger configs do: free travel, the approach and the way back to the print at `accel_fast`, the last move into the dock and the moves out of it at `accel_slow`. A path step can choose its own with the sixth field (see [Paths](#paths)). The value never goes above the acceleration that was set when the change began, and that acceleration is put back at the end, also after a failed change. The `DRY=1` plan shows the acceleration of every step.
+
+`travel_accel` sets the acceleration of the two free moves that are not part of a path: the lift to `safe_z` before the dock moves and the way back to the print afterwards (`fast` by default, i.e. `accel_fast`). `print` keeps the acceleration the print had, which suits printers whose dock moves were tuned that way; `slow` or a number in mm/s² work too. `print` is also accepted in the accel field of a path step, for the travel steps of a path.
 
 ## When a change fails during a print
 
@@ -220,7 +269,7 @@ Then:
   variable_user_resume_macro: "MOSAIC_RESUME_GUARD"
   ```
 
-  It runs first in their `RESUME`, before anything moves. This does not touch `mainsail.cfg` (a link into `~/mainsail-config` that is replaced on every update). It is checked in Mainsail's `client.cfg`; Fluidd's client macros have the same variable, but I have not checked where it runs there. Do **not** include `mosaic_resume_guard.cfg` next to them: Klipper does not complain about a second `[gcode_macro RESUME]`, it merges the two and the one read last wins, so the guard would silently replace their whole `RESUME` (or be replaced by it).
+  It runs first in their `RESUME`, before anything moves. If `user_resume_macro` already names a hook macro of your own, put `MOSAIC_RESUME_GUARD` on the first line of that macro instead; `MOSAIC_CHECK` looks into it. This does not touch `mainsail.cfg` (a link into `~/mainsail-config` that is replaced on every update). It is checked in Mainsail's `client.cfg`; Fluidd's client macros have the same variable, but I have not checked where it runs there. Do **not** include `mosaic_resume_guard.cfg` next to them: Klipper does not complain about a second `[gcode_macro RESUME]`, it merges the two and the one read last wins, so the guard would silently replace their whole `RESUME` (or be replaced by it).
 - Without a `RESUME` macro of your own: include `core/mosaic_resume_guard.cfg` (section 1 of `mosaic.cfg`, a line is in the template).
 
 `MOSAIC_CHECK` tells you which of these applies, and warns about the include next to the client macros. The refusal is an error from a console command only, so it does not end the paused print.
@@ -246,6 +295,7 @@ This needs `[pause_resume]` in `printer.cfg` and `variable_pause_on_error: True`
 | `MOSAIC_DOCK_SHOW [T=n]` | Print settings and paths |
 | `MOSAIC_DOCK_SWITCHES` | Print the current reading of the carriage switch and all dock switches |
 | `MOSAIC_RESUME [T=n] [RESUME=0]` | After a failed change: find the tool on the carriage, repair the changer, redo the change and resume the print |
+| `MOSAIC_DOCK_RESTORE_PENDING` | With `prime_before_restore`: go back to the print position that a pickup left for after the first prime (sideways at safe height, then down). Call it from your `prime_macro` when it is done at the brush; MOSAIC calls it after the prime anyway, and it does nothing when nothing is waiting |
 | `MOSAIC_DOCK_HEAD_RELEASED` | For the `release_gcode` of the carriage switch: pause the print if a selected tool falls off |
 | `MOSAIC_DOCK_CHECK` | Check every tool of the toolchanger: dock set up, paths valid, hooks present, which switches exist |
 

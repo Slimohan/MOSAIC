@@ -90,4 +90,26 @@ A pickup stands 45 mm away from the dock (higher Y), goes straight in (the last 
 
 ## 9. Printers whose bed moves in Z
 
-Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only.
+Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only. If the bed has to drop away first on low layers, use `'lift'`: the plan then starts with the move up to `safe_z` and ends with the move back to the print Z, the steps in between have X and Y only.
+
+A complete example, for five docks at the front of a bed-Z printer (dock Y -36.2, the lane 45 mm behind it), with the travel at the print acceleration and the dock moves at 2000 / 500 mm/s²:
+
+```
+variable_safe_z: 20
+variable_z_mode: 'lift'
+variable_lane_guard: 1
+variable_travel_accel: 'print'
+variable_prime_before_restore: 1
+variable_travel_speed: 300
+variable_approach_speed: 120
+variable_engage_speed: 20
+variable_pullout_speed: 20
+variable_accel_fast: 2000
+variable_accel_slow: 500
+variable_pickup_in:  "0,45,0,,,print/0,40,0,300,,print/0,18,0,120,,fast"
+variable_dropoff_in: "3.2,45,0,,,print/3.2,30,0,300,,print/3.2,6,0,120,,fast/3.2,0,0,20,,slow"
+variable_pickup_out: "3.2,0,0,20,,slow/3.2,12,0,20,v,slow/3.2,30,0,120,,fast/3.2,45,0,300,,print"
+variable_dropoff_out: "0,18,0,20,,slow/0,40,0,120,,fast/0,45,0,300,,print"
+```
+
+`MOSAIC_DOCK_PICKUP T=0 DRY=1` then prints: Z up to 20 only when lower, straight out to Y 8.8 when the carriage is in front of it, along the lane to the dock, in and out at the dock accelerations, and back to the print (X and Y, then Z).

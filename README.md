@@ -197,7 +197,9 @@ new features stay off until you switch them on. To use them, take these from the
 gets `before_change_gcode: MOSAIC_BEFORE_CHANGE`, `after_change_gcode: MOSAIC_AFTER_CHANGE T={tool.tool_number}` and
 `error_gcode: MOSAIC_TOOLCHANGE_ERROR` (remove a `SYNC_EXTRUDER_MOTION` line of yours and set `variable_motor` instead); in
 section 2 the new settings (`motor`, `retract`, `pause_on_error`, `auto_init`, `max_offset_x/y/z`, ...); in section 7 `check_count`,
-`accel_fast` and `accel_slow`. A printer with `[pause_resume]` in `printer.cfg` gets the pause on a failed tool change.
+`accel_fast` and `accel_slow`, and for printers whose bed moves in Z or whose docks need other paths `z_mode`, `pickup_in` /
+`dropoff_in`, `lane_guard`, `travel_accel` and `prime_before_restore` (all off or unchanged by default, see
+[docs/docking.md](docs/docking.md)). A printer with `[pause_resume]` in `printer.cfg` gets the pause on a failed tool change.
 
 ## Setup, once
 
@@ -447,7 +449,9 @@ What the MOSAIC macros assume, so your dock macros and settings have to fit:
 - **After a tool change the tool is mounted and the toolhead is clear of the dock.** MOSAIC then raises to `safe_z`
   and travels to the Nudge probe or the switch.
 - **`safe_z` must clear everything on the way**: the docks, the tools that are parked, the Nudge and the
-  switch. It is a setting in `_MOSAIC_SETTINGS`. Start high.
+  switch. It is a setting in `_MOSAIC_SETTINGS`. Start high. (The dock moves have their own `safe_z` in section 7; on a
+  printer whose bed moves in Z, `z_mode` `keep` or `lift` changes what it means, see
+  [docs/docking.md](docs/docking.md#printers-whose-bed-moves-in-z).)
 - **Home first.** The macros need homed axes, as the docking does.
 - **Errors reset the mounted tool.** A failed pickup or dropoff makes klipper-toolchanger forget which tool is
   mounted. After a failure, fix it by hand and run `INITIALIZE_TOOLCHANGER` before continuing.
@@ -557,6 +561,16 @@ check. The Calibration section has Calibrate all tools, X and Y only, Z only, an
 the Nudge state, the set-up check and the saved offsets. Without `mosaic_tools.cfg` the buttons
 fall back to `SELECT_TOOL` and `SET_TOOL_TEMPERATURE`.
 
+**Mainsail opens Mainsail instead of the page.** Mainsail is a progressive web app: once a browser has opened
+Mainsail, Mainsail's service worker answers every page navigation on that address with Mainsail itself (it only lets
+`/access`, `/api`, `/printer`, `/server`, `/websocket` and `/webcam*` through), so `http://<printer>/mosaic/` and the
+sidebar entry show Mainsail in that browser, while a fresh browser or `curl` gets the MOSAIC page. A forced reload
+(Ctrl+Shift+R) gets past it once. The lasting fix is to open the page on an address of its own, where Mainsail's service
+worker does not exist: another host name or port in front of the same `/mosaic/` route. With a reverse proxy, for
+example Traefik, a router for `mosaic.<your domain>` to the printer with an `addPrefix` middleware (`prefix: /mosaic`);
+then point the sidebar entry at it (`href` in `.theme/navi.json`, `"target": "_blank"`). The page itself works under any
+prefix, its calls to Moonraker are relative.
+
 **Locked while printing.** While a print runs or is paused, Mount, Dock, Calibrate and Reload saved offsets are
 switched off on the page, so a tap cannot move the toolhead in the middle of a print. Temperatures, fans and the
 filament still work. The console commands are not locked (`MOSAIC_AUTO_Z_OFFSET` is meant to run in `PRINT_START`).
@@ -625,6 +639,14 @@ for the Nudge, and with a three tool config in both shared extruder layouts. Old
 settings were run again and behave as before.
 
 The second review's changes (pausing in place, the guarded `RESUME`, saved retracts, `MOSAIC_REQUIRE_TOOL`, the prime macro with the first prime, the `M109` window) were run the same way. That review also found a stray quote that made every calibration stop with "Malformed command"; the batch tests had printed that warning and I had filtered it out. The test run now fails on any malformed or unknown command, and on Kalico it showed that calibration read result keys that Kalico's own `tools_calibrate` does not provide (fixed: it reads `last_result`).
+
+The dock additions for printers whose bed moves in Z (`z_mode` `keep` / `lift`, `pickup_in` / `dropoff_in`, `lane_guard`,
+`travel_accel`, `prime_before_restore`, `MOSAIC_DOCK_RESTORE_PENDING`) were checked in the Klipper-style macro simulator:
+with none of the new settings, and with `z_mode: 'absolute'`, pickup, drop-off, `DRY=1`, `MOSAIC_DOCK_SHOW`, `MOSAIC_DOCK_CHECK`,
+`MOSAIC_DOCK_TEACH` and `MOSAIC_DOCK_FILL` print the same moves and messages as before; with them, the moves of a five tool
+bed-Z changer were compared step by step with its own tool change macros. On that printer (Klipper, the real klipper-toolchanger,
+real switches) the configuration loads, `MOSAIC_CHECK` is clean and the `DRY=1` plans are right, and `install.sh` was run on its
+Pi (which showed the service name bug that is fixed now). Its real dock moves have not been run yet.
 
 **Not tested: real hardware.** Batch mode has no Nudge, no switch that triggers and no moving printer. The stand-in
 probe uses the sign convention of the klipper-toolchanger code; whether the offsets come out with the
