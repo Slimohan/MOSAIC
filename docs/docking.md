@@ -230,7 +230,7 @@ Then:
   variable_user_resume_macro: "MOSAIC_RESUME_GUARD"
   ```
 
-  It runs first in their `RESUME`, before anything moves. This does not touch `mainsail.cfg` (a link into `~/mainsail-config` that is replaced on every update). It is checked in Mainsail's `client.cfg`; Fluidd's client macros have the same variable, but I have not checked where it runs there. Do **not** include `mosaic_resume_guard.cfg` next to them: Klipper does not complain about a second `[gcode_macro RESUME]`, it merges the two and the one read last wins, so the guard would silently replace their whole `RESUME` (or be replaced by it).
+  It runs first in their `RESUME`, before anything moves. If `user_resume_macro` already names a hook macro of your own, put `MOSAIC_RESUME_GUARD` on the first line of that macro instead; `MOSAIC_CHECK` looks into it. This does not touch `mainsail.cfg` (a link into `~/mainsail-config` that is replaced on every update). It is checked in Mainsail's `client.cfg`; Fluidd's client macros have the same variable, but I have not checked where it runs there. Do **not** include `mosaic_resume_guard.cfg` next to them: Klipper does not complain about a second `[gcode_macro RESUME]`, it merges the two and the one read last wins, so the guard would silently replace their whole `RESUME` (or be replaced by it).
 - Without a `RESUME` macro of your own: include `core/mosaic_resume_guard.cfg` (section 1 of `mosaic.cfg`, a line is in the template).
 
 `MOSAIC_CHECK` tells you which of these applies, and warns about the include next to the client macros. The refusal is an error from a console command only, so it does not end the paused print.
