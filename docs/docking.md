@@ -75,7 +75,8 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `restore_move` | `1` = after the change go back to the print position safely (sideways at safe height first, then down) |
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
-| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part, for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: for printers whose bed moves in Z, the dock moves have no Z part except the `z_hop` lift, see [below](#printers-whose-bed-moves-in-z). |
+| `z_hop` | Only with `z_mode: keep`: signed mm to lift away from the print before every change (`keep` with 0 is refused). |
 | `approach` | Default entry path for all docks, see [Paths](#paths) |
 | `pickup_in`, `dropoff_in` | Own entry path for a pickup and for a drop-off. Empty means: use `approach`. |
 | `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the entry path of the same action backwards. |
@@ -189,13 +190,15 @@ On a printer where the bed, not the toolhead, moves in Z (docks at the front, no
 variable_z_mode: 'keep'
 ```
 
-in part 1 of section 7. Then **no dock move has a Z part**: the macros do not go to `safe_z`, not to `park_z + dz` of a step, and the move back to the print position has no Z either. Z stays wherever it is. This also means:
+and a lift, `variable_z_hop: <mm>` (see below), in part 1 of section 7. Then the **dock moves have no Z part** apart from that lift: the macros do not go to `safe_z`, not to `park_z + dz` of a step, and the move back to the print position has no Z either. This also means:
 
+- **`z_hop` lifts away from the print at every tool change**, so the nozzle does not travel across the part or the bed at print height. It is a signed number of mm: the direction of Z that takes the nozzle away from the bed, `5` if the bed moves down when Z goes up, `-5` if it moves down when Z goes down. The carriage lifts first, then moves sideways to the dock, and only after it is back over the print comes the way down to the Z it started from. A drop-off followed by a pickup in the same change lifts once. The lift stops at the Z limits of the printer. `keep` with `z_hop: 0` is refused (`MOSAIC_DOCK_CHECK` says so), because without a lift the nozzle would travel at print height. **Check the sign before the first change**: `MOSAIC_DOCK_PICKUP T=0 DRY=1` prints the lift, and with the carriage over the bed you can try the same move by hand with a small `G91` / `G0 Z...` before trusting it.
 - `park_z`, `safe_z` and the third number (`dz`) of every step are ignored and not range-checked. Keep writing `0` for `dz`, the step format does not change.
 - `MOSAIC_DOCK_TEACH` does not store a `park_z`, `MOSAIC_DOCK_FILL` ignores `DZ`.
-- After a failed check (see below) there is no slow lift to `safe_z` either: the carriage stays where it is.
+- After a failed check (see below) MOSAIC does not carry the carriage back over the print and does not take the lift back. klipper-toolchanger's own restore move at the end of the change still happens, though, and with its default `t_command_restore_axis: XYZ` it brings Z back too, so the lift is gone and the nozzle goes to the print position at print height. With `t_command_restore_axis: XY` in `[toolchanger]` the bed stays lowered until `MOSAIC_RESUME` redoes the change, lifts again if needed and takes the lift back when it is done. I have only tested the default `XYZ`; `XY` is what I would expect to be safer here, try it before relying on it.
 - All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it.
-- klipper-toolchanger's own `t_command_restore_axis` defaults to `XYZ`. With `keep` the Z it restores is the Z it already has, so nothing should move, but `XY` says what you mean. I have not tried this on a real printer.
+- `restore_move` must stay `1` (the default). MOSAIC takes the lift back itself, after the carriage is back over the print; with `restore_move: 0` the bed stays lowered until klipper-toolchanger's own restore moves it (with `XYZ` that move goes X, Y and Z together).
+- I have not tried any of this on a real printer.
 - `z_mode` only changes the **dock** moves. `MOSAIC_CALIBRATE` and the Z probing of the tool offsets still move the nozzle in Z the way a toolhead-Z printer does, so they are not set up for a bed-Z printer yet.
 
 ## Speed and acceleration
