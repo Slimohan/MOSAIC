@@ -207,12 +207,46 @@ variable_z_mode: 'lift'
 
 instead. Before the dock moves Z goes up to `safe_z` when it is lower (the bed goes down; above `safe_z` nothing moves), the dock steps have no Z part, and at the end Z goes back to the print Z after X and Y, the same order as on a toolhead-Z printer. As with `keep`, `park_z` and `dz` are not used and `MOSAIC_DOCK_TEACH` stores no `park_z`; `safe_z` is range-checked. After a failed check the carriage is lifted to `safe_z` slowly, like with `absolute`.
 
+Two more settings help on such printers, both off by default:
+
+- `variable_lane_guard: 1` (see above) for prints near the dock edge of the bed.
+- `variable_prime_before_restore: 1` if your `prime_macro` primes over a brush on the first use of a tool (`first_prime`). Without it a pickup first goes back to the print, then the prime macro travels to the brush and back again. With it the pickup leaves the carriage at the dock lane, the prime macro goes from there to the brush, and the way back to the print follows the prime. A prime macro that wants to push the toolchange retract back at the print position calls `MOSAIC_DOCK_RESTORE_PENDING` after the wipe and pushes afterwards:
+
+  ```
+  [gcode_macro MY_BRUSH_PRIME]
+  gcode:
+      {% set ts = printer["gcode_macro _MOSAIC_TOOLS_SETTINGS"] %}
+      {% set length = params.LENGTH|float %}
+      SAVE_GCODE_STATE NAME=my_prime
+      G90
+      M83
+      {% if length <= ts.retract|float + 0.01 %}
+          # an ordinary change: only the retract, pushed back where the nozzle is
+          G1 E{length} F{ts.unretract_speed|float * 60}
+      {% else %}
+          # first use: to the brush, prime, retract, wipe, back, push the retract back
+          G1 X... Y... F12000
+          G1 E{length} F{params.SPEED|float * 60}
+          G1 E-{ts.retract|float} F{ts.retract_speed|float * 60}
+          # ... wipe moves ...
+          MOSAIC_DOCK_RESTORE_PENDING
+          G90
+          M83
+          G1 E{ts.retract|float} F{ts.unretract_speed|float * 60}
+      {% endif %}
+      RESTORE_GCODE_STATE NAME=my_prime MOVE=0
+  ```
+
+  `MOSAIC_PRIME` calls the macro for every change that has a retract to push back, so the first branch keeps the ordinary changes at the print position. If the macro does not call `MOSAIC_DOCK_RESTORE_PENDING` (or the prime is skipped because the nozzle is cold), MOSAIC goes back after the prime. MOSAIC waits for the nozzle temperature (`prime_wait`) before it calls the macro, i.e. at the dock lane in this case.
+
 - klipper-toolchanger's own `t_command_restore_axis` defaults to `XYZ`. With `keep` the Z it restores is the Z it already has, so nothing should move, but `XY` says what you mean. I have not tried this on a real printer.
 - `z_mode` only changes the **dock** moves. `MOSAIC_CALIBRATE` and the Z probing of the tool offsets still move the nozzle in Z the way a toolhead-Z printer does, so they are not set up for a bed-Z printer yet.
 
 ## Speed and acceleration
 
 `accel_fast` and `accel_slow` (section 7 of `mosaic.cfg`, mm/s², 0 = do not touch) set the acceleration of the dock moves, the way fast Voron toolchanger configs do: free travel, the approach and the way back to the print at `accel_fast`, the last move into the dock and the moves out of it at `accel_slow`. A path step can choose its own with the sixth field (see [Paths](#paths)). The value never goes above the acceleration that was set when the change began, and that acceleration is put back at the end, also after a failed change. The `DRY=1` plan shows the acceleration of every step.
+
+`travel_accel` sets the acceleration of the two free moves that are not part of a path: the lift to `safe_z` before the dock moves and the way back to the print afterwards (`fast` by default, i.e. `accel_fast`). `print` keeps the acceleration the print had, which suits printers whose dock moves were tuned that way; `slow` or a number in mm/s² work too. `print` is also accepted in the accel field of a path step, for the travel steps of a path.
 
 ## When a change fails during a print
 
@@ -258,6 +292,7 @@ This needs `[pause_resume]` in `printer.cfg` and `variable_pause_on_error: True`
 | `MOSAIC_DOCK_SHOW [T=n]` | Print settings and paths |
 | `MOSAIC_DOCK_SWITCHES` | Print the current reading of the carriage switch and all dock switches |
 | `MOSAIC_RESUME [T=n] [RESUME=0]` | After a failed change: find the tool on the carriage, repair the changer, redo the change and resume the print |
+| `MOSAIC_DOCK_RESTORE_PENDING` | With `prime_before_restore`: go back to the print position that a pickup left for after the first prime (sideways at safe height, then down). Call it from your `prime_macro` when it is done at the brush; MOSAIC calls it after the prime anyway, and it does nothing when nothing is waiting |
 | `MOSAIC_DOCK_HEAD_RELEASED` | For the `release_gcode` of the carriage switch: pause the print if a selected tool falls off |
 | `MOSAIC_DOCK_CHECK` | Check every tool of the toolchanger: dock set up, paths valid, hooks present, which switches exist |
 
