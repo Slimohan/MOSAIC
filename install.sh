@@ -69,9 +69,9 @@ if [ -n "$old" ] && [ ! -e "$dest/mosaic.cfg" ]; then
         echo
     } > "$dest/mosaic.cfg"
     for f in $old; do
-        name=$(basename "$f")
-        { echo "# ===== from $name ====="; cat "$f"; echo; } >> "$dest/mosaic.cfg"
-        mv "$f" "$dest/old/$name"
+        fname=$(basename "$f")
+        { echo "# ===== from $fname ====="; cat "$f"; echo; } >> "$dest/mosaic.cfg"
+        mv "$f" "$dest/old/$fname"
     done
     echo "joined your numbered files into $dest/mosaic.cfg (originals: $dest/old/)"
 fi
@@ -118,9 +118,9 @@ for tree in "$@"; do
     [ -d "$xdest" ] || continue
     found=1
     for f in "$here"/klippy_extras/*.py; do
-        name=$(basename "$f")
-        rm -f "$xdest/$name"
-        if [ -n "$COPY" ]; then cp "$f" "$xdest/$name"; else ln -s "$f" "$xdest/$name"; fi
+        fname=$(basename "$f")
+        rm -f "$xdest/$fname"
+        if [ -n "$COPY" ]; then cp "$f" "$xdest/$fname"; else ln -s "$f" "$xdest/$fname"; fi
     done
     echo "installed the Z switch module into $xdest"
 done
@@ -220,8 +220,8 @@ UNIT
         sites="$NGINX_SITE"
     else
         sites=""
-        for name in mainsail fluidd; do
-            [ -f "/etc/nginx/sites-available/$name" ] && sites="$sites /etc/nginx/sites-available/$name"
+        for site_name in mainsail fluidd; do
+            [ -f "/etc/nginx/sites-available/$site_name" ] && sites="$sites /etc/nginx/sites-available/$site_name"
         done
     fi
     if [ -z "$sites" ]; then
