@@ -51,7 +51,7 @@ made-up demo data, not a real machine.
 | File | What it does |
 |---|---|
 | `mosaic.cfg` | The calibration macros. |
-| `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. |
+| `mosaic_tools.cfg` | Optional. `T0` ... `T9`, per tool temperature commands, standby handling. It loads `mosaic_tools_core.cfg` (everything but the T commands) and `t_commands/T0.cfg` ... `T9.cfg`; load those two yourself to get only the T commands of your tools. |
 | `mosaic_tool_heaters.cfg` | Optional. `M104` / `M109` with a `T` parameter for slicers. |
 | `mosaic_dock.cfg` | Optional. The dock pick-up / drop-off engine. You do not edit it. |
 | `mosaic_resume_guard.cfg` | Optional. Makes `RESUME` refuse after a failed tool change until `MOSAIC_RESUME` has repaired the changer. |
@@ -311,6 +311,18 @@ For both layouts:
 first. If a `[tool Tn]` section is left in `printer.cfg` above the include line, Klipper stops with
 `gcode command T0 already registered`; move it into section 5 of `mosaic.cfg`.
 
+**Only the T commands of your tools.** Mainsail shows a tool button for every `T<n>` command, so `mosaic_tools.cfg`,
+which has all ten, gives a five tool printer five buttons too many. Each T command is in a file of its own
+(`t_commands/T0.cfg` ... `T9.cfg`); replace `[include core/mosaic_tools.cfg]` in section 1 of `mosaic.cfg` with
+
+```
+[include core/mosaic_tools_core.cfg]
+[include core/t_commands/T[0-4].cfg]
+```
+
+`T[0-4]` loads T0 to T4 (Klipper takes the brackets as a range of characters); `T[0-2]` for three tools, `T*` for all
+ten. `MOSAIC_CHECK` lists T commands that have no tool. A configuration that keeps the old line is unchanged.
+
 | Command | Meaning |
 |---|---|
 | `T0` ... `T9` | Mount the tool (`SELECT_TOOL`), apply its saved offset in `gcode_offset` mode, and run the standby handling. Does nothing when that tool is already mounted. An unconfigured tool prints a warning; it does not raise an error, because any G-code error makes klipper-toolchanger forget the mounted tool. |
@@ -362,6 +374,13 @@ saved in `[save_variables]` as `t2_filament` and survives a restart. Spoolman is
 MOSAIC runs `SET_ACTIVE_SPOOL ID=<id>`, which is what Moonraker's Spoolman component provides, so the filament used
 is booked to the right spool after every change. Without Moonraker's `[spoolman]` the command does not exist and
 nothing happens. `variable_spoolman: False` in section 2 turns it off.
+
+**Mainsail's Spoolman panel.** Mainsail can keep one spool per tool: for every `T<n>` macro with a `spool_id` variable it
+shows the spool and lets you change it (it saves it as `t<n>__spool_id`). The MOSAIC T commands have that variable, and
+MOSAIC keeps it in step with the filament of the tool: a spool chosen in Mainsail becomes the tool's `SPOOL` (checked
+every 2 s, and made the active spool when that tool is mounted), `MOSAIC_SET_FILAMENT` and the page set it in
+Mainsail. At startup a spool that was only set in Mainsail is taken over; when both have one, MOSAIC's wins.
+`variable_mainsail_spools: False` in section 2 turns this off.
 
 The card shows a hotend drawn in the filament colour with the material and name. The print temperature becomes a
 temperature button on the card.
