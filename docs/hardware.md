@@ -266,9 +266,10 @@ your own), leave `variable_motor` empty and MOSAIC does nothing with the extrude
   a change is on the print (the changer has already moved there). Where that is not wanted, set `variable_prime_macro` to a
   macro of yours: it is called as `MY_MACRO T=<tool> LENGTH=<mm> SPEED=<mm/s>` once the tool is hot, and has to move to
   the brush or bucket, push `LENGTH` mm, wipe and come back. It runs inside the change, so klipper-toolchanger moves to
-  the print position afterwards by itself. With it, `variable_first_prime` adds that many mm the first time each
+  the print position afterwards by itself. After a failed change, `MOSAIC_RESUME` runs it while the print is still
+  paused and `RESUME` moves back to the saved position, so it never has to come back on its own either. With it, `variable_first_prime` adds that many mm the first time each
   tool is used in a print (a nozzle that has been standing empty puts down a tower with nothing in it). Call
-  `MOSAIC_PRIMED_RESET` at the start of `PRINT_START` so every print starts the list again. `MOSAIC_CHECK` tells you
+  `MOSAIC_PRIMED_RESET` at the start of `PRINT_START` so every print starts the list again (it is also cleared by `MOSAIC_TOOLS_OFF` at the end of a print and when a prime is asked for while nothing is printing, and `MOSAIC_CHECK` reminds you if your `PRINT_START` does not call it). `MOSAIC_CHECK` tells you
   if the macro does not exist.
 - **M109 wait.** With `mosaic_tool_heaters.cfg`, `variable_wait_below` / `variable_wait_above` make `M109 T.. S..` wait
   for a window around the target (the usual `TEMPERATURE_WAIT`) instead of Klipper's slower "flat for a few seconds" wait,
