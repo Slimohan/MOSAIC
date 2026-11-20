@@ -75,12 +75,13 @@ Open `MOSAIC/mosaic.cfg` and go to section 7 (dock positions). Part 1 has the sh
 | `restore_move` | `1` = after the change go back to the print position safely (sideways at safe height first, then down) |
 | `check_switches` | `1` = read the switches before and after every change, `0` = ignore them |
 | `switch_settle` | Wait in ms after the carriage stops before reading the switches |
-| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part, for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `z_mode` | `absolute` (default): the dock moves use `safe_z` and the Z of the dock. `keep`: no dock move has a Z part. `lift`: up to `safe_z` when lower before the dock moves, back to the print Z after, the dock steps have no Z. `keep` and `lift` are for printers whose bed moves in Z, see [below](#printers-whose-bed-moves-in-z). |
+| `lane_guard` | `1` = a carriage that is between the first entry step and the docks goes straight out to the line of that step first, then sideways. For `keep` / `lift`, where the paths are the only clearance. `0` (default) = straight to the first step. |
 | `approach` | Default entry path for all docks, see [Paths](#paths) |
 | `pickup_in`, `dropoff_in` | Own entry path for a pickup and for a drop-off. Empty means: use `approach`. |
 | `pickup_out`, `dropoff_out` | Default exit paths. Empty means: walk the entry path of the same action backwards. |
 
-**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z` (not used with `z_mode: keep`), and optional own `approach`, `pickup_in`, `dropoff_in`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
+**Per tool (`_MOSAIC_DOCK_T0` … `_MOSAIC_DOCK_T9`):** `taught`, `park_x`, `park_y`, `park_z` (not used with `z_mode: keep` or `lift`), and optional own `approach`, `pickup_in`, `dropoff_in`, `pickup_out`, `dropoff_out` (leave empty to use the shared ones).
 
 ### Teach a dock
 
@@ -194,7 +195,16 @@ in part 1 of section 7. Then **no dock move has a Z part**: the macros do not go
 - `park_z`, `safe_z` and the third number (`dz`) of every step are ignored and not range-checked. Keep writing `0` for `dz`, the step format does not change.
 - `MOSAIC_DOCK_TEACH` does not store a `park_z`, `MOSAIC_DOCK_FILL` ignores `DZ`.
 - After a failed check (see below) there is no slow lift to `safe_z` either: the carriage stays where it is.
-- All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it.
+- All the geometry is in X and Y, so put the safe lane into the paths: make the first step of every path a point on a lane that is clear of the docks and tools (for docks at the front: some mm behind the dock row), and make sure the straight move from the print position to that first step and the one back from the last step stay on the clear side of it. `variable_lane_guard: 1` does the first half for you: a carriage that is between the lane and the docks (a print near the dock edge of the bed) first goes straight out to the lane, then along it.
+
+If the bed must first drop away from the docks or the tools (low layers on a printer whose bed edge or print would come too close to the hanging tool), use
+
+```
+variable_z_mode: 'lift'
+```
+
+instead. Before the dock moves Z goes up to `safe_z` when it is lower (the bed goes down; above `safe_z` nothing moves), the dock steps have no Z part, and at the end Z goes back to the print Z after X and Y, the same order as on a toolhead-Z printer. As with `keep`, `park_z` and `dz` are not used and `MOSAIC_DOCK_TEACH` stores no `park_z`; `safe_z` is range-checked. After a failed check the carriage is lifted to `safe_z` slowly, like with `absolute`.
+
 - klipper-toolchanger's own `t_command_restore_axis` defaults to `XYZ`. With `keep` the Z it restores is the Z it already has, so nothing should move, but `XY` says what you mean. I have not tried this on a real printer.
 - `z_mode` only changes the **dock** moves. `MOSAIC_CALIBRATE` and the Z probing of the tool offsets still move the nozzle in Z the way a toolhead-Z printer does, so they are not set up for a bed-Z printer yet.
 

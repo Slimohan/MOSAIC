@@ -90,4 +90,4 @@ A pickup stands 45 mm away from the dock (higher Y), goes straight in (the last 
 
 ## 9. Printers whose bed moves in Z
 
-Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only.
+Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only. If the bed has to drop away first on low layers, use `'lift'`: the plan then starts with the move up to `safe_z` and ends with the move back to the print Z, the steps in between have X and Y only.
