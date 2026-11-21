@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-# VRTX: tool control, docking and calibration for tool changers
+# VRTX
 
 One package for the tools of a tool changer on Klipper and Kalico: calibration, tool control and docking.
 Every nozzle touches a small probe, the macros turn the touch points into the X, Y and Z offsets of each tool,
