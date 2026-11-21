@@ -27,7 +27,8 @@
 #   CONF=~/printer_<NAME>_data/config ./install.sh
 # reads Moonraker's port from that instance's moonraker.conf and gives the
 # instance its own page service (vrtx-<NAME>), page port and address
-# (http://<computer>/vrtx-<NAME>/). Run it once per instance.
+# (http://<computer>/vrtx-<NAME>/). The update panel and the Mainsail sidebar
+# show plain VRTX. Run it once per instance.
 # Running it again is safe: every step checks what is already there.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
@@ -344,10 +345,17 @@ print("sidebar: VRTX entry in %s (reload Mainsail to see it)" % path)
 PY
     fi
 
-    # VRTX in the Moonraker update panel of this instance.
+    # VRTX in the Moonraker update panel of this instance. Each printer has its
+    # own moonraker.conf, so the entry is always the plain [update_manager vrtx];
+    # only managed_services names this printer's page service ($name).
     mconf="$conf/moonraker.conf"
     if [ -f "$mconf" ]; then
-        if grep -q "^\[update_manager $name\]" "$mconf"; then
+        if [ "$name" != vrtx ] && grep -q "^\[update_manager $name\]" "$mconf"; then
+            cp "$mconf" "$mconf.vrtx-backup"
+            awk -v h="[update_manager $name]" '$0==h{skip=1;next} /^\[/{skip=0} !skip' "$mconf.vrtx-backup" > "$mconf"
+            echo "update panel: [update_manager $name] renamed to [update_manager vrtx] (backup: moonraker.conf.vrtx-backup)"
+        fi
+        if grep -q "^\[update_manager vrtx\]" "$mconf"; then
             if [ -z "$inst" ] && grep -q "^managed_services:.*vrtx-ui" "$mconf"; then
                 cp "$mconf" "$mconf.vrtx-backup"
                 sed -i "s/^\(managed_services:.*\)vrtx-ui/\1vrtx/" "$mconf"
@@ -359,7 +367,7 @@ PY
         else
             cat >> "$mconf" <<CONF
 
-[update_manager $name]
+[update_manager vrtx]
 type: git_repo
 path: $here
 origin: https://github.com/Slimohan/VRTX.git
@@ -367,7 +375,7 @@ primary_branch: main
 managed_services: klipper $name
 CONF
             sudo systemctl restart "$msvc" 2>/dev/null || true
-            echo "update panel: VRTX added to moonraker.conf as [update_manager $name], $msvc restarted"
+            echo "update panel: VRTX added to moonraker.conf as [update_manager vrtx], $msvc restarted"
         fi
     fi
 fi

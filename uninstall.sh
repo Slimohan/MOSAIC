@@ -95,9 +95,11 @@ fi
 
 # --- update panel ------------------------------------------------------------
 mconf="$conf/moonraker.conf"
-if [ -f "$mconf" ] && grep -q "^\[update_manager $name\]" "$mconf"; then
+# Always [update_manager vrtx]; an older install of a second printer may have [update_manager vrtx-<NAME>].
+for uname in vrtx $name; do
+if [ -f "$mconf" ] && grep -q "^\[update_manager $uname\]" "$mconf"; then
     cp "$mconf" "$mconf.vrtx-uninstall-$stamp"
-    python3 - "$mconf" "[update_manager $name]" <<'PY'
+    python3 - "$mconf" "[update_manager $uname]" <<'PY'
 import sys
 path, header = sys.argv[1], sys.argv[2]
 out, skip = [], False
@@ -114,9 +116,10 @@ for line in open(path).read().splitlines(True):
         out.append(line)
 open(path, "w").write("".join(out).rstrip("\n") + "\n")
 PY
-    echo "update panel: [update_manager $name] removed (backup: $mconf.vrtx-uninstall-$stamp)"
+    echo "update panel: [update_manager $uname] removed (backup: $mconf.vrtx-uninstall-$stamp)"
     sudo systemctl restart "$msvc" 2>/dev/null || true
 fi
+done
 asvc="$(dirname "$conf")/moonraker.asvc"
 if [ -f "$asvc" ] && grep -qxE "$name|vrtx-ui" "$asvc"; then
     sed -i -E "/^($name|vrtx-ui)$/d" "$asvc"
