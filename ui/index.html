@@ -221,6 +221,7 @@
   <section class="sec-off">
     <h2>Offsets</h2>
     <table id="offsets"><tr><td>-</td></tr></table>
+    <div class="note hidden" id="off_note" style="margin-top:6px">* the offset in use differs from the one VRTX saved, or is not saved yet (it comes from the config). Hover a value for details.</div>
     <div class="bar" style="margin-top:8px"><button id="b_echo">Print offsets to console</button> <button class="warn" id="b_apply">Reload saved offsets</button></div>
   </section>
   <section class="hidden" id="logbox">
@@ -358,6 +359,23 @@ $("c_xy").onclick = () => gcode("VRTX_CALIBRATE_XY" + calTemp(), "Calibrate X an
 $("c_z").onclick = () => gcode("VRTX_CALIBRATE_Z" + calTemp(), "Calibrate Z");
 
 function td(t) { const e = document.createElement("td"); e.textContent = t; return e; }
+// The offset of tool n on axis a ("x", "y", "z") that the printer uses now. With offset_method
+// tool_parameter that is the gcode_<a>_offset of the tool object (it can come from [tool] in the
+// config, with nothing saved yet); with gcode_offset it is the saved t<n>_offset_<a>.
+// Returns [value or undefined, saved value or undefined].
+function offsetOf(ts, v, n, a) {
+  const saved = v["t" + n + "_offset_" + a];
+  const live = ts["gcode_" + a + "_offset"];
+  return [offsetMethod === "tool_parameter" && live !== undefined ? Number(live) : saved, saved];
+}
+function offsetText(ts, v, n, a) {
+  const [val, saved] = offsetOf(ts, v, n, a);
+  if (val === undefined) return ["-", ""];
+  const differs = saved !== undefined && Math.abs(Number(saved) - val) > 0.0005;
+  const notSaved = saved === undefined && offsetMethod === "tool_parameter";
+  return [Number(val).toFixed(3) + (differs || notSaved ? "*" : ""),
+          differs ? "active; saved " + Number(saved).toFixed(3) : notSaved ? "active (from the config), not saved by VRTX yet" : ""];
+}
 
 // ---------------------------------------------------------------- state
 let toolNames = [];        // e.g. ["tool T0", ...], learned from the toolchanger
@@ -369,6 +387,7 @@ let alignKey = "";
 let cardKey = "";
 const cards = {};          // tool number -> element references
 let printing = false;      // a print is running or paused: tool changes are locked
+let offsetMethod = "tool_parameter"; // _VRTX_SETTINGS offset_method
 let toolSettings = {};     // _VRTX_TOOLS_SETTINGS (presets)
 let filaments = {};        // tool number -> filament as shown (the Spoolman spool on top of the saved one)
 let filRaw = {};           // tool number -> filament as saved by VRTX_SET_FILAMENT (edited in the dialog)
@@ -771,8 +790,9 @@ function updateCards(o, nums, v) {
     if (fo && document.activeElement !== c.fan) {
       c.fan.value = Math.round((fo.speed || 0) * 100); c.fanLabel.textContent = "Fan " + c.fan.value + " %";
     } else if (!fo && ts.fan) { c.fanLabel.textContent = "Fan"; }
-    const xyz = ["x", "y", "z"].map(a => { const val = v["t" + n + "_offset_" + a]; return a.toUpperCase() + " " + (val === undefined ? "-" : Number(val).toFixed(3)); });
-    c.off.textContent = "Offset " + xyz.join("  ");
+    const xyz = ["x", "y", "z"].map(a => offsetText(ts, v, n, a));
+    c.off.textContent = "Offset " + xyz.map((x, i) => "XYZ"[i] + " " + x[0]).join("  ");
+    c.off.title = xyz.map((x, i) => x[1] ? "XYZ"[i] + ": " + x[1] : "").filter(Boolean).join("\n");
   });
 }
 
@@ -818,6 +838,7 @@ async function refresh() {
 
     const st = o["gcode_macro _VRTX_SETTINGS"];
     refTool = st && st.reference_tool !== undefined ? Number(st.reference_tool) : 0;
+    offsetMethod = String((st && st.offset_method) || "tool_parameter").toLowerCase();
     hasVrtxTools = !!o["gcode_macro _VRTX_TOOLS_SETTINGS"];
     toolSettings = o["gcode_macro _VRTX_TOOLS_SETTINGS"] || {};
     const ps = o.print_stats || {};
@@ -841,12 +862,17 @@ async function refresh() {
 
     const t = $("offsets"); t.textContent = "";
     const h = document.createElement("tr"); ["Tool", "X", "Y", "Z"].forEach(x => { const e = document.createElement("th"); e.textContent = x; h.appendChild(e); }); t.appendChild(h);
-    nums.forEach(n => {
+    let marked = false;
+    nums.forEach((n, idx) => {
       const r = document.createElement("tr");
       r.appendChild(td("T" + n));
-      ["x", "y", "z"].forEach(a => { const val = v["t" + n + "_offset_" + a]; r.appendChild(td(val === undefined ? "-" : Number(val).toFixed(3))); });
+      ["x", "y", "z"].forEach(a => {
+        const [txt, tip] = offsetText(o[toolNames[idx]] || {}, v, n, a);
+        const e = td(txt); if (tip) { e.title = tip; marked = true; } r.appendChild(e);
+      });
       t.appendChild(r);
     });
+    $("off_note").classList.toggle("hidden", !marked);
     showLog(o["gcode_macro _VRTX_LOG"]);
     filamentCheck(ps.filename || "", ps.state, nums);
     if (!busy && $("status").textContent === "Connecting...") say("Ready.", "ok");
