@@ -33,6 +33,7 @@ import argparse
 import http.server
 import json
 import os
+import sys
 import threading
 import time
 import urllib.error
@@ -355,6 +356,27 @@ def sync_loop(moonraker, interval):
         time.sleep(interval)
 
 
+def restart_on_update(interval=10.0):
+    """Restart this server when an update replaces its code. The update panel
+    restarts only Klipper, so a page service of its own (vrtx-<NAME>) would
+    otherwise keep running the old code until the computer restarts."""
+    me = os.path.abspath(__file__)
+    try:
+        start = os.stat(me).st_mtime
+    except OSError:
+        return
+    while True:
+        time.sleep(interval)
+        try:
+            if os.stat(me).st_mtime != start:
+                time.sleep(2)  # let the update finish writing
+                print("VRTX page: code updated, restarting")
+                sys.stdout.flush()
+                os.execv(sys.executable, [sys.executable, me] + sys.argv[1:])
+        except OSError:
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8099)
@@ -367,6 +389,7 @@ def main():
     if not a.no_slicer_sync:
         threading.Thread(target=sync_loop, args=(a.moonraker.rstrip("/"), a.sync_interval),
                          daemon=True).start()
+    threading.Thread(target=restart_on_update, daemon=True).start()
     srv = http.server.ThreadingHTTPServer((a.bind, a.port),
                                           make_handler(a.moonraker.rstrip("/")))
     print("VRTX page on port %d, Moonraker at %s" % (a.port, a.moonraker))
