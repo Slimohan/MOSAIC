@@ -346,9 +346,13 @@ PY
     fi
 
     # VRTX in the Moonraker update panel of this instance. Each printer has its
-    # own moonraker.conf, so the entry is always the plain [update_manager vrtx];
-    # only managed_services names this printer's page service ($name).
+    # own moonraker.conf, so the entry is always the plain [update_manager vrtx].
+    # Moonraker only lets an entry restart a service with the entry's own name,
+    # so a page service with a printer name (vrtx-<NAME>) is not listed: it
+    # restarts itself when an update changes its code.
     mconf="$conf/moonraker.conf"
+    managed="klipper"
+    [ "$name" = vrtx ] && managed="klipper vrtx"
     if [ -f "$mconf" ]; then
         if [ "$name" != vrtx ] && grep -q "^\[update_manager $name\]" "$mconf"; then
             cp "$mconf" "$mconf.vrtx-backup"
@@ -359,6 +363,11 @@ PY
             if [ -z "$inst" ] && grep -q "^managed_services:.*vrtx-ui" "$mconf"; then
                 cp "$mconf" "$mconf.vrtx-backup"
                 sed -i "s/^\(managed_services:.*\)vrtx-ui/\1vrtx/" "$mconf"
+                sudo systemctl restart "$msvc" 2>/dev/null || true
+                echo "update panel: fixed managed_services in moonraker.conf (backup: moonraker.conf.vrtx-backup), Moonraker restarted"
+            elif [ "$name" != vrtx ] && grep -q "^managed_services:.*vrtx-" "$mconf"; then
+                cp "$mconf" "$mconf.vrtx-backup"
+                sed -i "s/^managed_services:.*vrtx-.*$/managed_services: $managed/" "$mconf"
                 sudo systemctl restart "$msvc" 2>/dev/null || true
                 echo "update panel: fixed managed_services in moonraker.conf (backup: moonraker.conf.vrtx-backup), Moonraker restarted"
             else
@@ -372,7 +381,7 @@ type: git_repo
 path: $here
 origin: https://github.com/Slimohan/VRTX.git
 primary_branch: main
-managed_services: klipper $name
+managed_services: $managed
 CONF
             sudo systemctl restart "$msvc" 2>/dev/null || true
             echo "update panel: VRTX added to moonraker.conf as [update_manager vrtx], $msvc restarted"
