@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds your mosaic.cfg from the template (config/mosaic.cfg).
+"""Builds your vrtx.cfg from the template (config/vrtx.cfg).
 
     build_config.py [--calibration nudge|camera] [--tools N] [--template FILE] [-o FILE]
 
@@ -19,7 +19,7 @@ everything; the build only switches parts of it on or off:
         fewer tools, so that Mainsail shows only the tool buttons you need.
 
 The first line of the result records the answers, so a later template can be built the
-same way:  # MOSAIC-INSTALL: calibration=nudge tools=4
+same way:  # VRTX-INSTALL: calibration=nudge tools=4
 Standard library only.
 """
 import argparse
@@ -30,12 +30,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 METHODS = ("nudge", "camera")
 TITLES = {"nudge": "NUDGE", "camera": "CAMERA"}
-RECORD = re.compile(r"^# MOSAIC-INSTALL: calibration=(\w+) tools=(\d+)\s*$")
+RECORD = re.compile(r"^# VRTX-INSTALL: calibration=(\w+) tools=(\d+)\s*$")
 
 
 def tcommands(n):
     if n >= 10:
-        return ("[include core/mosaic_tools.cfg]\n"
+        return ("[include core/vrtx_tools.cfg]\n"
                 "# Only ten tools exist (T0 ... T9). With fewer tools Mainsail would show tool\n"
                 "# buttons for tools you do not have; the installer loads only the T commands of\n"
                 "# your tools then.\n")
@@ -46,9 +46,9 @@ def tcommands(n):
     return ("# Only the T commands of your %d tool%s are loaded (T0%s), so that Mainsail shows\n"
             "# %s tool button%s and not ten. If you add a tool later, change the number in\n"
             "# the second line (T[0-%d] = T0 to T%d), or replace both lines with\n"
-            "#   [include core/mosaic_tools.cfg]\n"
+            "#   [include core/vrtx_tools.cfg]\n"
             "# to load all ten T commands.\n"
-            "[include core/mosaic_tools_core.cfg]\n"
+            "[include core/vrtx_tools_core.cfg]\n"
             "[include core/t_commands/%s.cfg]\n"
             % (n, "" if n == 1 else "s", "" if n == 1 else " ... " + last,
                "one" if n == 1 else str(n), "" if n == 1 else "s",
@@ -120,7 +120,7 @@ def build(template, calibration, tools):
     if seen != set(METHODS):
         raise SystemExit("template lacks a calibration block")
     text = "\n".join(out)
-    return "# MOSAIC-INSTALL: calibration=%s tools=%d\n%s" % (calibration, tools, text)
+    return "# VRTX-INSTALL: calibration=%s tools=%d\n%s" % (calibration, tools, text)
 
 
 def recorded(path):
@@ -140,7 +140,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--calibration", default="nudge", choices=METHODS)
     ap.add_argument("--tools", type=int, default=10)
-    ap.add_argument("--template", default=os.path.join(HERE, "mosaic.cfg"))
+    ap.add_argument("--template", default=os.path.join(HERE, "vrtx.cfg"))
     ap.add_argument("--record-of", metavar="FILE", help="print 'calibration tools' recorded in FILE and exit")
     ap.add_argument("-o", "--output")
     a = ap.parse_args()

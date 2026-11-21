@@ -1,10 +1,10 @@
 # Shared by install.sh and uninstall.sh: which Klipper instance this is.
 # A KIAUH multi-instance setup keeps each printer in ~/printer_<NAME>_data with
 # its own klipper-<NAME> and moonraker-<NAME> services and Moonraker port, so
-# MOSAIC gets its own service, page port and page address per instance:
+# VRTX gets its own service, page port and page address per instance:
 #
-#   ~/printer_data/config                 -> mosaic,           /mosaic/,           port 8099
-#   ~/printer_PICOTRAIN_data/config       -> mosaic-PICOTRAIN, /mosaic-PICOTRAIN/, port 8099 + (Moonraker port - 7125)
+#   ~/printer_data/config                 -> vrtx,           /vrtx/,           port 8099
+#   ~/printer_PICOTRAIN_data/config       -> vrtx-PICOTRAIN, /vrtx-PICOTRAIN/, port 8099 + (Moonraker port - 7125)
 #
 # Override with INSTANCE=..., MOONRAKER_PORT=..., PAGE_PORT=...
 datadir=$(dirname "$conf")
@@ -20,7 +20,7 @@ case "$inst" in
 esac
 suf=""
 [ -n "$inst" ] && suf="-$inst"
-name="mosaic$suf"
+name="vrtx$suf"
 msvc="moonraker$suf"
 mport="${MOONRAKER_PORT:-$(python3 - "$conf/moonraker.conf" <<'PY'
 import configparser, sys

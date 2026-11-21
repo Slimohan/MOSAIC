@@ -1,18 +1,18 @@
 #!/bin/sh
-# MOSAIC installer. Run it from the MOSAIC download (normally ~/MOSAIC):
-#   1. Creates your MOSAIC folder in the Klipper config folder
-#      (~/printer_data/config/MOSAIC) with your one config file, mosaic.cfg,
-#      and a link core/ -> this download, and adds  [include MOSAIC/mosaic.cfg]
+# VRTX installer. Run it from the VRTX download (normally ~/VRTX):
+#   1. Creates your VRTX folder in the Klipper config folder
+#      (~/printer_data/config/VRTX) with your one config file, vrtx.cfg,
+#      and a link core/ -> this download, and adds  [include VRTX/vrtx.cfg]
 #      to printer.cfg. Your file is never overwritten. An older install with
-#      numbered files (00_core.cfg ...) is joined into mosaic.cfg.
-#      A new mosaic.cfg is built from the template (config/mosaic.cfg) and two
+#      numbered files (00_core.cfg ...) is joined into vrtx.cfg.
+#      A new vrtx.cfg is built from the template (config/vrtx.cfg) and two
 #      questions: which calibration method you prefer (Nudge probe or camera;
 #      the other method stays in the file, switched off) and how many tools you
 #      have (the tools, docks and T commands are written for that many).
 #   2. Links the optional Z switch module into Klipper and Kalico.
-#   3. Sets up the MOSAIC page: a service, the page at http://<printer>/mosaic/
-#      through the web server of Mainsail and/or Fluidd, a MOSAIC entry in
-#      Mainsail's sidebar (Fluidd has none), and MOSAIC in the Moonraker update
+#   3. Sets up the VRTX page: a service, the page at http://<printer>/vrtx/
+#      through the web server of Mainsail and/or Fluidd, a VRTX entry in
+#      Mainsail's sidebar (Fluidd has none), and VRTX in the Moonraker update
 #      panel. Needs sudo for the service and nginx.
 #
 # Usage: ./install.sh [path to klipper or kalico, ...]   (default: ~/klipper ~/kalico)
@@ -26,8 +26,8 @@
 # Several printers on one computer (KIAUH instances, ~/printer_<NAME>_data):
 #   CONF=~/printer_<NAME>_data/config ./install.sh
 # reads Moonraker's port from that instance's moonraker.conf and gives the
-# instance its own page service (mosaic-<NAME>), page port and address
-# (http://<computer>/mosaic-<NAME>/). Run it once per instance.
+# instance its own page service (vrtx-<NAME>), page port and address
+# (http://<computer>/vrtx-<NAME>/). Run it once per instance.
 # Running it again is safe: every step checks what is already there.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
@@ -35,54 +35,54 @@ conf="${CONF:-$HOME/printer_data/config}"
 conf="${conf%/}"
 . "$here/instance.sh"
 if [ -n "$inst" ]; then
-    echo "instance $inst: Moonraker port $mport, MOSAIC service $name, page port $pport"
+    echo "instance $inst: Moonraker port $mport, VRTX service $name, page port $pport"
 fi
 
-# --- 1. your MOSAIC folder -----------------------------------------------------
+# --- 1. your VRTX folder -----------------------------------------------------
 if [ ! -f "$conf/printer.cfg" ]; then
     echo "no printer.cfg in $conf - set CONF=/path/to/config and run again"
     exit 1
 fi
 case "$here/" in
-    "$conf"/*) echo "This MOSAIC download is inside the config folder ($here)."
-               echo "Clone it into your home folder instead:  cd ~ && git clone https://github.com/Slimohan/MOSAIC"
+    "$conf"/*) echo "This VRTX download is inside the config folder ($here)."
+               echo "Clone it into your home folder instead:  cd ~ && git clone https://github.com/Slimohan/VRTX"
                exit 1 ;;
 esac
-dest="$conf/MOSAIC"
+dest="$conf/VRTX"
 mkdir -p "$dest"
 if [ -e "$dest/core" ] && [ ! -L "$dest/core" ]; then
     echo "$dest/core exists and is not a link - move it away and run again"
     exit 1
 fi
 ln -sfn "$here" "$dest/core"
-echo "MOSAIC folder: $dest (core -> $here)"
+echo "VRTX folder: $dest (core -> $here)"
 # Your files from an older install:
 # - dock positions that lived next to printer.cfg
-if [ -f "$conf/mosaic_dock_positions.cfg" ] && [ ! -e "$dest/mosaic.cfg" ] && [ ! -e "$dest/20_dock_positions.cfg" ]; then
-    mv "$conf/mosaic_dock_positions.cfg" "$dest/20_dock_positions.cfg"
-    echo "moved your mosaic_dock_positions.cfg into $dest"
+if [ -f "$conf/vrtx_dock_positions.cfg" ] && [ ! -e "$dest/vrtx.cfg" ] && [ ! -e "$dest/20_dock_positions.cfg" ]; then
+    mv "$conf/vrtx_dock_positions.cfg" "$dest/20_dock_positions.cfg"
+    echo "moved your vrtx_dock_positions.cfg into $dest"
 fi
-# - the numbered files (00_core.cfg ... 90_settings.cfg): joined into one mosaic.cfg
-#   in the order Klipper used to load them, the old files go to MOSAIC/old/
+# - the numbered files (00_core.cfg ... 90_settings.cfg): joined into one vrtx.cfg
+#   in the order Klipper used to load them, the old files go to VRTX/old/
 old=$(ls "$dest"/[0-9][0-9]_*.cfg 2>/dev/null || true)
-if [ -n "$old" ] && [ ! -e "$dest/mosaic.cfg" ]; then
+if [ -n "$old" ] && [ ! -e "$dest/vrtx.cfg" ]; then
     mkdir -p "$dest/old"
     {
-        echo "# MOSAIC: your configuration. This is the ONE file you edit."
+        echo "# VRTX: your configuration. This is the ONE file you edit."
         echo "# Joined from your numbered files by the installer, in the order they loaded."
         echo "# The originals are in the old/ folder next to this file. The current template,"
         echo "# with the explanations for every section, is built by:  python3 core/config/build_config.py"
         echo
-    } > "$dest/mosaic.cfg"
+    } > "$dest/vrtx.cfg"
     for f in $old; do
         fname=$(basename "$f")
-        { echo "# ===== from $fname ====="; cat "$f"; echo; } >> "$dest/mosaic.cfg"
+        { echo "# ===== from $fname ====="; cat "$f"; echo; } >> "$dest/vrtx.cfg"
         mv "$f" "$dest/old/$fname"
     done
-    echo "joined your numbered files into $dest/mosaic.cfg (originals: $dest/old/)"
+    echo "joined your numbered files into $dest/vrtx.cfg (originals: $dest/old/)"
 fi
-# mosaic.cfg is built from the template with your two answers (a new install only,
-# an existing mosaic.cfg is never touched, and then the questions are not asked).
+# vrtx.cfg is built from the template with your two answers (a new install only,
+# an existing vrtx.cfg is never touched, and then the questions are not asked).
 build="$here/config/build_config.py"
 ask_number() {   # $1 = the question, $2 = lowest, $3 = highest answer; the answer is in $reply
     while :; do
@@ -95,8 +95,8 @@ ask_number() {   # $1 = the question, $2 = lowest, $3 = highest answer; the answ
         echo "  Please type a number from $2 to $3."
     done
 }
-if [ ! -e "$dest/mosaic.cfg" ]; then
-    command -v python3 >/dev/null 2>&1 || { echo "python3 is needed to build mosaic.cfg"; exit 1; }
+if [ ! -e "$dest/vrtx.cfg" ]; then
+    command -v python3 >/dev/null 2>&1 || { echo "python3 is needed to build vrtx.cfg"; exit 1; }
     calibration="$CALIBRATION"
     tools="$TOOLS"
     case "$calibration" in
@@ -129,51 +129,51 @@ if [ ! -e "$dest/mosaic.cfg" ]; then
             echo "no terminal: 10 tools (TOOLS=4 for four tools)"
         fi
     fi
-    python3 "$build" --calibration "$calibration" --tools "$tools" -o "$dest/mosaic.cfg"
-    echo "  created mosaic.cfg for $tools tool(s), calibration method $calibration - this is the one file you edit"
-elif grep -q "^# Joined from your numbered files" "$dest/mosaic.cfg" && [ -d "$dest/old" ]; then
+    python3 "$build" --calibration "$calibration" --tools "$tools" -o "$dest/vrtx.cfg"
+    echo "  created vrtx.cfg for $tools tool(s), calibration method $calibration - this is the one file you edit"
+elif grep -q "^# Joined from your numbered files" "$dest/vrtx.cfg" && [ -d "$dest/old" ]; then
     :   # a joined file always differs from the template, nothing to compare
 elif command -v python3 >/dev/null 2>&1; then
-    # the current template, built the way this mosaic.cfg was built, for you to compare
-    rec=$(python3 "$build" --record-of "$dest/mosaic.cfg")
+    # the current template, built the way this vrtx.cfg was built, for you to compare
+    rec=$(python3 "$build" --record-of "$dest/vrtx.cfg")
     if [ -n "$rec" ]; then
         calibration=${rec% *}
         tools=${rec#* }
     else
-        calibration=nudge     # a mosaic.cfg from before the installer built it: the old, full template
+        calibration=nudge     # a vrtx.cfg from before the installer built it: the old, full template
         tools=10
     fi
     newtmp=$(mktemp)
     python3 "$build" --calibration "$calibration" --tools "$tools" -o "$newtmp"
-    if cmp -s "$newtmp" "$dest/mosaic.cfg"; then
+    if cmp -s "$newtmp" "$dest/vrtx.cfg"; then
         rm -f "$newtmp"
     else
-        mv "$newtmp" "$dest/mosaic.cfg.new"
-        echo "  kept your mosaic.cfg (the current template, built for $tools tool(s) and the $calibration method, is saved as mosaic.cfg.new)"
+        mv "$newtmp" "$dest/vrtx.cfg.new"
+        echo "  kept your vrtx.cfg (the current template, built for $tools tool(s) and the $calibration method, is saved as vrtx.cfg.new)"
     fi
 fi
 # the one line in printer.cfg
-if grep -q "^\[include MOSAIC/mosaic\.cfg\]" "$conf/printer.cfg"; then
-    echo "printer.cfg already includes MOSAIC/mosaic.cfg"
-elif grep -q "^\[include MOSAIC/\*\.cfg\]" "$conf/printer.cfg"; then
-    cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-backup"
-    sed -i "s|^\[include MOSAIC/\*\.cfg\]|[include MOSAIC/mosaic.cfg]|" "$conf/printer.cfg"
-    echo "printer.cfg: [include MOSAIC/*.cfg] changed to [include MOSAIC/mosaic.cfg] (backup: printer.cfg.mosaic-backup)"
+if grep -q "^\[include VRTX/vrtx\.cfg\]" "$conf/printer.cfg"; then
+    echo "printer.cfg already includes VRTX/vrtx.cfg"
+elif grep -q "^\[include VRTX/\*\.cfg\]" "$conf/printer.cfg"; then
+    cp "$conf/printer.cfg" "$conf/printer.cfg.vrtx-backup"
+    sed -i "s|^\[include VRTX/\*\.cfg\]|[include VRTX/vrtx.cfg]|" "$conf/printer.cfg"
+    echo "printer.cfg: [include VRTX/*.cfg] changed to [include VRTX/vrtx.cfg] (backup: printer.cfg.vrtx-backup)"
 else
-    cp "$conf/printer.cfg" "$conf/printer.cfg.mosaic-backup"
-    { echo "[include MOSAIC/mosaic.cfg]"; cat "$conf/printer.cfg.mosaic-backup"; } > "$conf/printer.cfg"
-    echo "added [include MOSAIC/mosaic.cfg] at the top of printer.cfg (backup: printer.cfg.mosaic-backup)"
+    cp "$conf/printer.cfg" "$conf/printer.cfg.vrtx-backup"
+    { echo "[include VRTX/vrtx.cfg]"; cat "$conf/printer.cfg.vrtx-backup"; } > "$conf/printer.cfg"
+    echo "added [include VRTX/vrtx.cfg] at the top of printer.cfg (backup: printer.cfg.vrtx-backup)"
 fi
-if grep -qE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg"; then
-    echo "NOTE: printer.cfg still has includes from an older MOSAIC install:"
-    grep -nE "^\[include (mosaic/|mosaic_dock_positions)" "$conf/printer.cfg" | sed 's/^/    /'
-    echo "      remove them, MOSAIC/mosaic.cfg loads everything now"
+if grep -qE "^\[include (vrtx/|vrtx_dock_positions)" "$conf/printer.cfg"; then
+    echo "NOTE: printer.cfg still has includes from an older VRTX install:"
+    grep -nE "^\[include (vrtx/|vrtx_dock_positions)" "$conf/printer.cfg" | sed 's/^/    /'
+    echo "      remove them, VRTX/vrtx.cfg loads everything now"
 fi
-stray=$(ls "$dest"/*.cfg 2>/dev/null | grep -v "/mosaic\.cfg$" || true)
+stray=$(ls "$dest"/*.cfg 2>/dev/null | grep -v "/vrtx\.cfg$" || true)
 if [ -n "$stray" ]; then
-    echo "NOTE: only mosaic.cfg is loaded from $dest. These files are NOT loaded any more:"
+    echo "NOTE: only vrtx.cfg is loaded from $dest. These files are NOT loaded any more:"
     echo "$stray" | sed 's/^/    /'
-    echo "      add an [include ...] line at the end of mosaic.cfg for any you still need"
+    echo "      add an [include ...] line at the end of vrtx.cfg for any you still need"
 fi
 
 # --- 2. Z switch module ------------------------------------------------------
@@ -190,32 +190,32 @@ for tree in "$@"; do
     done
     echo "installed the Z switch module into $xdest"
 done
-[ $found -eq 1 ] || echo "no klippy/extras folder found, Z switch module not installed (only needed with [mosaic_z_probe]; pass the path to Klipper or Kalico)"
+[ $found -eq 1 ] || echo "no klippy/extras folder found, Z switch module not installed (only needed with [vrtx_z_probe]; pass the path to Klipper or Kalico)"
 
-# --- 3. the MOSAIC page ------------------------------------------------------
+# --- 3. the VRTX page ------------------------------------------------------
 if [ -z "$NO_WEB" ]; then
-    echo "--- MOSAIC page"
+    echo "--- VRTX page"
     user=$(id -un)
     unit=/etc/systemd/system/$name.service
-    # An earlier version called the service mosaic-ui; Moonraker only accepts the name "mosaic".
-    if [ -z "$inst" ] && [ -f /etc/systemd/system/mosaic-ui.service ]; then
-        sudo systemctl disable --now mosaic-ui >/dev/null 2>&1 || true
-        sudo rm -f /etc/systemd/system/mosaic-ui.service
-        echo "renamed the old service mosaic-ui to mosaic"
+    # An earlier version called the service vrtx-ui; Moonraker only accepts the name "vrtx".
+    if [ -z "$inst" ] && [ -f /etc/systemd/system/vrtx-ui.service ]; then
+        sudo systemctl disable --now vrtx-ui >/dev/null 2>&1 || true
+        sudo rm -f /etc/systemd/system/vrtx-ui.service
+        echo "renamed the old service vrtx-ui to vrtx"
     fi
-    # Converting a hand-made setup: the single "mosaic" service edited to talk to
+    # Converting a hand-made setup: the single "vrtx" service edited to talk to
     # this instance's Moonraker becomes $name, and its update panel entry,
-    # Moonraker permission and /mosaic/ route go (the route only when no default
+    # Moonraker permission and /vrtx/ route go (the route only when no default
     # instance in ~/printer_data uses it).
     drop_default=0
-    if [ -n "$inst" ] && [ -f /etc/systemd/system/mosaic.service ] && grep -q "127.0.0.1:$mport" /etc/systemd/system/mosaic.service; then
-        echo "found the service mosaic pointed at this instance's Moonraker (port $mport): replacing it with $name"
-        sudo systemctl disable --now mosaic >/dev/null 2>&1 || true
-        sudo rm -f /etc/systemd/system/mosaic.service
+    if [ -n "$inst" ] && [ -f /etc/systemd/system/vrtx.service ] && grep -q "127.0.0.1:$mport" /etc/systemd/system/vrtx.service; then
+        echo "found the service vrtx pointed at this instance's Moonraker (port $mport): replacing it with $name"
+        sudo systemctl disable --now vrtx >/dev/null 2>&1 || true
+        sudo rm -f /etc/systemd/system/vrtx.service
         sudo systemctl daemon-reload
-        if [ -f "$conf/moonraker.conf" ] && grep -q "^\[update_manager mosaic\]" "$conf/moonraker.conf"; then
-            cp "$conf/moonraker.conf" "$conf/moonraker.conf.mosaic-backup"
-            python3 - "$conf/moonraker.conf" "[update_manager mosaic]" <<'PY'
+        if [ -f "$conf/moonraker.conf" ] && grep -q "^\[update_manager vrtx\]" "$conf/moonraker.conf"; then
+            cp "$conf/moonraker.conf" "$conf/moonraker.conf.vrtx-backup"
+            python3 - "$conf/moonraker.conf" "[update_manager vrtx]" <<'PY'
 import sys
 path, header = sys.argv[1], sys.argv[2]
 out, skip = [], False
@@ -232,21 +232,21 @@ for line in open(path).read().splitlines(True):
         out.append(line)
 open(path, "w").write("".join(out).rstrip("\n") + "\n")
 PY
-            echo "update panel: removed the old [update_manager mosaic] of this instance (backup: moonraker.conf.mosaic-backup)"
+            echo "update panel: removed the old [update_manager vrtx] of this instance (backup: moonraker.conf.vrtx-backup)"
         fi
-        [ -f "$datadir/moonraker.asvc" ] && sed -i "/^mosaic$/d" "$datadir/moonraker.asvc"
+        [ -f "$datadir/moonraker.asvc" ] && sed -i "/^vrtx$/d" "$datadir/moonraker.asvc"
         [ -f "$HOME/printer_data/config/printer.cfg" ] || drop_default=1
     fi
 
     tmp=$(mktemp)
     cat > "$tmp" <<UNIT
 [Unit]
-Description=MOSAIC tool page ($name)
+Description=VRTX tool page ($name)
 After=network.target $msvc.service
 
 [Service]
 User=$user
-ExecStart=/usr/bin/python3 $here/ui/mosaic_server.py --port $pport --bind 127.0.0.1 --moonraker http://127.0.0.1:$mport
+ExecStart=/usr/bin/python3 $here/ui/vrtx_server.py --port $pport --bind 127.0.0.1 --moonraker http://127.0.0.1:$mport
 Restart=on-failure
 
 [Install]
@@ -263,23 +263,23 @@ UNIT
     # Let Moonraker restart the service (needed for the update panel).
     asvc="$(dirname "$conf")/moonraker.asvc"
     if [ -f "$asvc" ]; then
-        [ -z "$inst" ] && sed -i "/^mosaic-ui$/d" "$asvc"
+        [ -z "$inst" ] && sed -i "/^vrtx-ui$/d" "$asvc"
         if ! grep -qx "$name" "$asvc"; then
             echo "$name" >> "$asvc"
             echo "added $name to $asvc"
         fi
     fi
 
-    # The page at /mosaic/ (or /mosaic-<NAME>/) inside the nginx site of Mainsail and/or Fluidd.
+    # The page at /vrtx/ (or /vrtx-<NAME>/) inside the nginx site of Mainsail and/or Fluidd.
     # The default instance uses the snippet in this download; an instance gets its
-    # own snippet in /etc/nginx/mosaic/ (kept out of the download, so updates stay clean).
+    # own snippet in /etc/nginx/vrtx/ (kept out of the download, so updates stay clean).
     if [ -z "$inst" ]; then
-        snippet="$here/ui/nginx-mosaic.conf"
+        snippet="$here/ui/nginx-vrtx.conf"
     else
-        snippet="/etc/nginx/mosaic/$name.conf"
+        snippet="/etc/nginx/vrtx/$name.conf"
         tmp=$(mktemp)
-        sed -e "s|/mosaic|/$name|g" -e "s|127.0.0.1:8099|127.0.0.1:$pport|" "$here/ui/nginx-mosaic.conf" > "$tmp"
-        sudo mkdir -p /etc/nginx/mosaic && sudo install -m 644 "$tmp" "$snippet" || echo "nginx: could not write $snippet (sudo?)"
+        sed -e "s|/vrtx|/$name|g" -e "s|127.0.0.1:8099|127.0.0.1:$pport|" "$here/ui/nginx-vrtx.conf" > "$tmp"
+        sudo mkdir -p /etc/nginx/vrtx && sudo install -m 644 "$tmp" "$snippet" || echo "nginx: could not write $snippet (sudo?)"
         rm -f "$tmp"
     fi
     if [ -n "$NGINX_SITE" ]; then
@@ -294,10 +294,10 @@ UNIT
         echo "nginx: no Mainsail or Fluidd site found in /etc/nginx/sites-available, the page is only on this machine at port $pport (set NGINX_SITE=/etc/nginx/sites-available/<name> and run again)"
     fi
     for site in $sites; do
-        if [ $drop_default -eq 1 ] && [ -f "$site" ] && grep -q "ui/nginx-mosaic.conf" "$site"; then
-            sudo cp "$site" "$site.mosaic-backup"
-            sudo sed -i "\|ui/nginx-mosaic.conf|d" "$site"
-            echo "nginx: removed the old /mosaic/ route from $site (backup: $site.mosaic-backup)"
+        if [ $drop_default -eq 1 ] && [ -f "$site" ] && grep -q "ui/nginx-vrtx.conf" "$site"; then
+            sudo cp "$site" "$site.vrtx-backup"
+            sudo sed -i "\|ui/nginx-vrtx.conf|d" "$site"
+            echo "nginx: removed the old /vrtx/ route from $site (backup: $site.vrtx-backup)"
         fi
         if [ ! -f "$site" ]; then
             echo "nginx: $site not found (set NGINX_SITE=... to the right file and run again)"
@@ -306,7 +306,7 @@ UNIT
         else
             sudo cp "$site" "$site.$name-backup"
             # insert the include as the first line inside the server block
-            if sudo sed -i "0,/server[[:space:]]*{/s||&\n    include $snippet;  # MOSAIC page ($name)|" "$site" && sudo nginx -t >/dev/null 2>&1; then
+            if sudo sed -i "0,/server[[:space:]]*{/s||&\n    include $snippet;  # VRTX page ($name)|" "$site" && sudo nginx -t >/dev/null 2>&1; then
                 sudo systemctl reload nginx
                 echo "nginx: the page is at http://<printer>/$name/ via $site (backup: $site.$name-backup)"
             else
@@ -316,14 +316,14 @@ UNIT
         fi
     done
 
-    # The MOSAIC entry in Mainsail's sidebar (.theme/navi.json, merged with yours).
+    # The VRTX entry in Mainsail's sidebar (.theme/navi.json, merged with yours).
     # Fluidd has no such feature; skipped when Mainsail is not installed.
     mainsail=0
     [ -d "$HOME/mainsail" ] && mainsail=1
     case " $sites " in *mainsail*) mainsail=1 ;; esac
     [ -n "$NGINX_SITE" ] && mainsail=1
     if [ $mainsail -eq 0 ]; then
-        echo "sidebar: Mainsail not found, no sidebar entry (open http://<printer>/mosaic/ or bookmark it)"
+        echo "sidebar: Mainsail not found, no sidebar entry (open http://<printer>/vrtx/ or bookmark it)"
     elif [ -f "$conf/printer.cfg" ]; then
         mkdir -p "$conf/.theme"
         python3 - "$conf/.theme/navi.json" "$here/examples/mainsail/navi.json" "/$name/" <<'PY'
@@ -340,19 +340,19 @@ if os.path.exists(path):
         sys.exit(0)
 entries = [e for e in entries if e.get("title") != entry["title"]] + [entry]
 json.dump(entries, open(path, "w"), indent=2)
-print("sidebar: MOSAIC entry in %s (reload Mainsail to see it)" % path)
+print("sidebar: VRTX entry in %s (reload Mainsail to see it)" % path)
 PY
     fi
 
-    # MOSAIC in the Moonraker update panel of this instance.
+    # VRTX in the Moonraker update panel of this instance.
     mconf="$conf/moonraker.conf"
     if [ -f "$mconf" ]; then
         if grep -q "^\[update_manager $name\]" "$mconf"; then
-            if [ -z "$inst" ] && grep -q "^managed_services:.*mosaic-ui" "$mconf"; then
-                cp "$mconf" "$mconf.mosaic-backup"
-                sed -i "s/^\(managed_services:.*\)mosaic-ui/\1mosaic/" "$mconf"
+            if [ -z "$inst" ] && grep -q "^managed_services:.*vrtx-ui" "$mconf"; then
+                cp "$mconf" "$mconf.vrtx-backup"
+                sed -i "s/^\(managed_services:.*\)vrtx-ui/\1vrtx/" "$mconf"
                 sudo systemctl restart "$msvc" 2>/dev/null || true
-                echo "update panel: fixed managed_services in moonraker.conf (backup: moonraker.conf.mosaic-backup), Moonraker restarted"
+                echo "update panel: fixed managed_services in moonraker.conf (backup: moonraker.conf.vrtx-backup), Moonraker restarted"
             else
                 echo "update panel: already in moonraker.conf"
             fi
@@ -362,18 +362,18 @@ PY
 [update_manager $name]
 type: git_repo
 path: $here
-origin: https://github.com/Slimohan/MOSAIC.git
+origin: https://github.com/Slimohan/VRTX.git
 primary_branch: main
 managed_services: klipper $name
 CONF
             sudo systemctl restart "$msvc" 2>/dev/null || true
-            echo "update panel: MOSAIC added to moonraker.conf as [update_manager $name], $msvc restarted"
+            echo "update panel: VRTX added to moonraker.conf as [update_manager $name], $msvc restarted"
         fi
     fi
 fi
 
 echo
-echo "Next: edit $dest/mosaic.cfg (Mainsail: Machine > MOSAIC > mosaic.cfg; Fluidd: Configuration > MOSAIC), section by section."
+echo "Next: edit $dest/vrtx.cfg (Mainsail: Machine > VRTX > vrtx.cfg; Fluidd: Configuration > VRTX), section by section."
 echo "Move your [tool Tn], tool heater/fan and [toolchanger] sections from printer.cfg into it."
-echo "Then restart Klipper and run MOSAIC_CHECK."
-[ -z "$NO_WEB" ] && echo "MOSAIC page: http://<printer>/$name/ (Mainsail: reload and click MOSAIC in the sidebar; Fluidd: bookmark the address)."
+echo "Then restart Klipper and run VRTX_CHECK."
+[ -z "$NO_WEB" ] && echo "VRTX page: http://<printer>/$name/ (Mainsail: reload and click VRTX in the sidebar; Fluidd: bookmark the address)."
