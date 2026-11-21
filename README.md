@@ -187,17 +187,13 @@ The order matters: VRTX's T commands have to load before the tools, and your set
 `[tool Tn]` sections and your `[toolchanger]` options from `printer.cfg` into sections 5 and 4. Each section explains
 what goes into it, and Klipper refuses to start while a section you switched on still has `...` in it.
 
-**Your hardware: two ways, both in `vrtx.cfg`.** VRTX works with any board and holds no board of its own. The
-heaters, thermistors, fans, motors and switches of your tools are set up in sections 5 and 6, and which way you pick
-is up to you:
-
-- **A. Point at a file of your own.** Your board or toolhead has a config file (the one that came with your tool
-  changer, say). Put it next to `printer.cfg` and add one line in section 5:
-  `[include ../my_tools.cfg]`. Its sections can have any names; the `[tool Tn]` sections and, in section 6, the
-  switch names refer to them. Changing boards means changing that file, never VRTX.
-- **B. Define them in `vrtx.cfg`.** Section 5 has ready-made templates for the heaters and fans (a full toolhead
-  per tool, or a hotend swapper with one shared extruder motor) and section 6 for the switches. Remove the hash
-  signs and fill in your pins.
+**Your hardware stays in your board file.** VRTX works with any board and defines no hardware. The heaters,
+thermistors, hotend fans and motors of your tools are set up in the config file of the board they are wired to (the
+file that came with your tool changer or tool board, say), and the `[tool Tn]` sections in section 5 only point at
+them by name. Put that file next to `printer.cfg` and include it there before the VRTX line, or with one line in
+section 5: `[include ../my_tools.cfg]`. Its sections can have any names. Changing boards means changing that file,
+never VRTX. Example board files for full toolheads and for hotend swappers are in `docs/hardware.md`. The carriage
+and dock switches can go in your board file too, or in section 6, which has templates for them.
 
 Examples, including complete board files: [docs/hardware.md](docs/hardware.md). Only `vrtx.cfg` is loaded from the
 `VRTX` folder, so leftover copies and old files there do no harm.
@@ -765,6 +761,23 @@ The first run needs care: keep a hand near the emergency stop, start with `safe_
 and switch positions at low speed, and run `VRTX_Z_PROBE_ACCURACY` before you trust the Z values from a switch.
 Nudge's own documentation says Z is less repeatable than X and Y; if your Z offsets vary from run to run, add the
 separate switch. Please report anything odd.
+
+### Config test
+
+`tests/klipper_check.py` builds every `vrtx.cfg` the installer can make (both calibration methods, full toolheads
+and hotend swapper, 1, 3 and 10 tools) and loads each one into real Klipper with klipper-toolchanger, in batch mode,
+next to a test printer of the matching kind. The hotend swapper test printer has its part cooling fans as one
+carriage `[fan]`, as such printers do. It also checks that `VRTX_CHECK` reports a hotend swapper without a shared
+motor. Run it before every change to the template or the installer:
+
+```
+git clone https://github.com/Klipper3d/klipper ~/test-klipper
+git clone https://github.com/viesturz/klipper-toolchanger ~/test-klipper-toolchanger
+python3 tests/klipper_check.py --klipper ~/test-klipper --toolchanger ~/test-klipper-toolchanger
+```
+
+Use checkouts made for the test, not your printer's: the script builds Klipper's Linux MCU once and links the
+klipper-toolchanger modules into that checkout.
 
 ## Licence and credits
 
