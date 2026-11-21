@@ -1,11 +1,11 @@
 [Unit]
-Description=MOSAIC tool page
+Description=VRTX tool page
 After=network.target moonraker.service
 
 [Service]
 # Change User and the path to match your installation.
 User=pi
-ExecStart=/usr/bin/python3 /home/pi/MOSAIC/ui/mosaic_server.py --port 8099
+ExecStart=/usr/bin/python3 /home/pi/VRTX/ui/vrtx_server.py --port 8099
 Restart=on-failure
 
 [Install]

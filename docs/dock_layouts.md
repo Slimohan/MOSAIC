@@ -1,6 +1,6 @@
 # Path patterns for different docks
 
-These are patterns, not measured settings for any particular printer. They show how to describe where the carriage comes from and how it leaves. Put them into `variable_approach`, `variable_pickup_in`, `variable_dropoff_in`, `variable_pickup_out` and `variable_dropoff_out` (shared in `_MOSAIC_DOCK_SETTINGS`, or per tool). All distances are relative to the dock position of that tool (`park_x`, `park_y`, `park_z`). Always check with `DRY=1` first.
+These are patterns, not measured settings for any particular printer. They show how to describe where the carriage comes from and how it leaves. Put them into `variable_approach`, `variable_pickup_in`, `variable_dropoff_in`, `variable_pickup_out` and `variable_dropoff_out` (shared in `_VRTX_DOCK_SETTINGS`, or per tool). All distances are relative to the dock position of that tool (`park_x`, `park_y`, `park_z`). Always check with `DRY=1` first.
 
 Format: `dx,dy,dz[,speed[,v]]` steps separated by `/`. The last move of the approach goes to the dock position itself.
 
@@ -69,7 +69,7 @@ If the switch does not show the tool there, the change stops with an error befor
 Per tool section, e.g. the dock at the end of the row has a wall on the right:
 
 ```
-[gcode_macro _MOSAIC_DOCK_T5]
+[gcode_macro _VRTX_DOCK_T5]
 variable_approach: "-20,-25,0/-3,-5,0"
 ```
 
@@ -90,7 +90,7 @@ A pickup stands 45 mm away from the dock (higher Y), goes straight in (the last 
 
 ## 9. Printers whose bed moves in Z
 
-Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `MOSAIC_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only. If the bed has to drop away first on low layers, use `'lift'`: the plan then starts with the move up to `safe_z` and ends with the move back to the print Z, the steps in between have X and Y only.
+Set `variable_z_mode: 'keep'` (see [docking.md](docking.md#printers-whose-bed-moves-in-z)). Then no move has a Z part, `dz` is ignored (keep writing `0`) and the paths of the example above can be used as they are. Check the plan with `VRTX_DOCK_PICKUP T=0 DRY=1`: the printed moves have X and Y only. If the bed has to drop away first on low layers, use `'lift'`: the plan then starts with the move up to `safe_z` and ends with the move back to the print Z, the steps in between have X and Y only.
 
 A complete example, for five docks at the front of a bed-Z printer (dock Y -36.2, the lane 45 mm behind it), with the travel at the print acceleration and the dock moves at 2000 / 500 mm/s²:
 
@@ -112,4 +112,4 @@ variable_pickup_out: "3.2,0,0,20,,slow/3.2,12,0,20,v,slow/3.2,30,0,120,,fast/3.2
 variable_dropoff_out: "0,18,0,20,,slow/0,40,0,120,,fast/0,45,0,300,,print"
 ```
 
-`MOSAIC_DOCK_PICKUP T=0 DRY=1` then prints: Z up to 20 only when lower, straight out to Y 8.8 when the carriage is in front of it, along the lane to the dock, in and out at the dock accelerations, and back to the print (X and Y, then Z).
+`VRTX_DOCK_PICKUP T=0 DRY=1` then prints: Z up to 20 only when lower, straight out to Y 8.8 when the carriage is in front of it, along the lane to the dock, in and out at the dock accelerations, and back to the print (X and Y, then Z).

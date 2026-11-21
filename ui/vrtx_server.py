@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-# Small web server for the MOSAIC web page. Standard library only.
+# Small web server for the VRTX web page. Standard library only.
 #
-#   python3 mosaic_server.py [--port 8099] [--moonraker http://127.0.0.1:7125]
+#   python3 vrtx_server.py [--port 8099] [--moonraker http://127.0.0.1:7125]
 #
 # Serves index.html and forwards a short list of Moonraker requests, so the
 # page needs no CORS setup in Moonraker. Anyone who can open the page can move
 # the printer, so run it only on a trusted network.
 #
 # Slicer filament sync: every few seconds it copies the filament of every tool
-# (MOSAIC_SET_FILAMENT, saved as t<N>_filament) into Moonraker's database,
+# (VRTX_SET_FILAMENT, saved as t<N>_filament) into Moonraker's database,
 # namespace lane_data, one entry T<N> per tool. OrcaSlicer's "Synchronize
 # filaments" for Moonraker printers reads that namespace and fills the
 # project's filament list with the colour and material of every tool. Only the
 # entries T0 ... T9 are written; other lane_data entries are left alone.
-# Switch it off with variable_slicer_sync: False in _MOSAIC_TOOLS_SETTINGS,
+# Switch it off with variable_slicer_sync: False in _VRTX_TOOLS_SETTINGS,
 # or with --no-slicer-sync.
 #
 # Spoolman: a tool whose filament has a spool id (SPOOL=, or the Spoolman panel
@@ -23,11 +23,11 @@
 # [spoolman] component (/server/spoolman/proxy, only GET /v1/spool and
 # GET /v1/spool/<id>), kept 30 s. Without Spoolman nothing changes.
 # The same loop also copies material, name, colour and temperature of a tool's
-# spool into its saved filament (MOSAIC_SET_FILAMENT, only when they differ and
-# not while printing), so the console (MOSAIC_TOOLS_STATUS) and the macros have
-# them too. variable_spoolman: False in _MOSAIC_TOOLS_SETTINGS switches it off.
+# spool into its saved filament (VRTX_SET_FILAMENT, only when they differ and
+# not while printing), so the console (VRTX_TOOLS_STATUS) and the macros have
+# them too. variable_spoolman: False in _VRTX_TOOLS_SETTINGS switches it off.
 #
-# Part of MOSAIC (github.com/Slimohan/MOSAIC), GPL-3.0.
+# Part of VRTX (github.com/Slimohan/VRTX), GPL-3.0.
 
 import argparse
 import http.server
@@ -64,7 +64,7 @@ def _hex6(v):
 
 
 def _spool_fields(r):
-    """The few values of a Spoolman spool object that MOSAIC uses."""
+    """The few values of a Spoolman spool object that VRTX uses."""
     fil = r.get("filament") or {}
     temp = fil.get("settings_extruder_temp")
     return {
@@ -136,7 +136,7 @@ def spool_info(moonraker, sid):
 
 def make_handler(moonraker):
     class Handler(http.server.BaseHTTPRequestHandler):
-        server_version = "mosaic-ui"
+        server_version = "vrtx-ui"
 
         def log_message(self, fmt, *args):
             pass
@@ -242,11 +242,11 @@ def with_spool(f, spool):
 
 
 def lane_entries(status, spool=lambda sid: None):
-    """The lane_data entries MOSAIC wants, from a printer status answer.
+    """The lane_data entries VRTX wants, from a printer status answer.
     None means: do not touch lane_data (sync off, or no tool changer yet).
     spool(id) gives the Spoolman values of a spool (None without Spoolman)."""
     tc = status.get("toolchanger")
-    settings = status.get("gcode_macro _MOSAIC_TOOLS_SETTINGS") or {}
+    settings = status.get("gcode_macro _VRTX_TOOLS_SETTINGS") or {}
     if not tc or str(settings.get("slicer_sync", True)).lower() in ("false", "0", "no"):
         return None
     variables = (status.get("save_variables") or {}).get("variables") or {}
@@ -281,7 +281,7 @@ def _clean(v):
 def fill_filaments(moonraker, status):
     """Copy the values of each tool's Spoolman spool into its saved filament
     (t<n>_filament) when they differ. Not while printing."""
-    settings = status.get("gcode_macro _MOSAIC_TOOLS_SETTINGS") or {}
+    settings = status.get("gcode_macro _VRTX_TOOLS_SETTINGS") or {}
     if str(settings.get("spoolman", True)).lower() in ("false", "0", "no"):
         return
     if (status.get("print_stats") or {}).get("state") in ("printing", "paused"):
@@ -311,15 +311,15 @@ def fill_filaments(moonraker, status):
                 and abs(float(f.get("temp") or 0) - temp) < 0.5)
         if same:
             continue
-        script = 'MOSAIC_SET_FILAMENT T=%d MATERIAL=%s NAME="%s"%s TEMP=%g SPOOL=%d' % (
+        script = 'VRTX_SET_FILAMENT T=%d MATERIAL=%s NAME="%s"%s TEMP=%g SPOOL=%d' % (
             n, mat or '""', name, (" COLOR=" + color) if color else "", temp, sid)
         _call(moonraker, "POST", "/printer/gcode/script?script=" + urllib.parse.quote(script), {})
 
 
 def sync_once(moonraker, last):
-    """One pass: write changed entries, remove MOSAIC's entries that are gone.
+    """One pass: write changed entries, remove VRTX's entries that are gone.
     `last` is what this process wrote before; returns the new state."""
-    q = "/printer/objects/query?toolchanger&save_variables&print_stats=state&gcode_macro%20_MOSAIC_TOOLS_SETTINGS"
+    q = "/printer/objects/query?toolchanger&save_variables&print_stats=state&gcode_macro%20_VRTX_TOOLS_SETTINGS"
     status = _call(moonraker, "GET", q)["result"]["status"]
     fill_filaments(moonraker, status)
     want = lane_entries(status, lambda sid: spool_info(moonraker, sid))
@@ -369,7 +369,7 @@ def main():
                          daemon=True).start()
     srv = http.server.ThreadingHTTPServer((a.bind, a.port),
                                           make_handler(a.moonraker.rstrip("/")))
-    print("MOSAIC page on port %d, Moonraker at %s" % (a.port, a.moonraker))
+    print("VRTX page on port %d, Moonraker at %s" % (a.port, a.moonraker))
     srv.serve_forever()
 
 

@@ -1,22 +1,22 @@
 # Your hardware
 
-MOSAIC works with any board. It contains no board of its own: the heaters, thermistors, fans, motors and switches of
-your tools are set up in sections 5 and 6 of `MOSAIC/mosaic.cfg`, and MOSAIC refers to them by name. You have two
+VRTX works with any board. It contains no board of its own: the heaters, thermistors, fans, motors and switches of
+your tools are set up in sections 5 and 6 of `VRTX/vrtx.cfg`, and VRTX refers to them by name. You have two
 ways to set them up. Pick one per printer.
 
 **A. A file of your own.** A board file next to `printer.cfg` (from your tool changer, or one you write from the
-examples below), pulled in by one line in section 5 of `mosaic.cfg`:
+examples below), pulled in by one line in section 5 of `vrtx.cfg`:
 
 ```
-MOSAIC/mosaic.cfg   section 5:   [include ../my_tools.cfg]
-my_tools.cfg                     yours, next to printer.cfg; MOSAIC never touches it
+VRTX/vrtx.cfg   section 5:   [include ../my_tools.cfg]
+my_tools.cfg                     yours, next to printer.cfg; VRTX never touches it
 ```
 
-The `../` is there because the include is relative to the `MOSAIC` folder. (Including the file in `printer.cfg`
-before `[include MOSAIC/mosaic.cfg]` works as well.) The name of the file is up to you, and so are the names of the
+The `../` is there because the include is relative to the `VRTX` folder. (Including the file in `printer.cfg`
+before `[include VRTX/vrtx.cfg]` works as well.) The name of the file is up to you, and so are the names of the
 sections in it.
 
-**B. Everything in `mosaic.cfg`.** The examples below are what you would put in sections 5 and 6 (Part 1 of each),
+**B. Everything in `vrtx.cfg`.** The examples below are what you would put in sections 5 and 6 (Part 1 of each),
 without a separate file. The templates in the file are the same, with `...` where your pins go.
 
 Either way, one toolboard per tool, an expansion board for all tools, or everything on the mainboard: the
@@ -27,16 +27,16 @@ What goes where:
 | What | Where |
 |---|---|
 | `[mcu ...]` of the tool board(s) | your board file (A), or in `printer.cfg` |
-| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | A: your board file. B: `mosaic.cfg`, section 5 Part 1 |
+| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | A: your board file. B: `vrtx.cfg`, section 5 Part 1 |
 | `[extruder_stepper ...]` (a shared extruder motor) | same |
 | `[heater_fan ...]`, `[fan_generic ...]` | same |
-| `[gcode_button ...]` carriage and dock switches | A: your board file. B: `mosaic.cfg`, section 6 Part 1 |
-| `[tool Tn]` | `MOSAIC/mosaic.cfg`, section 5 Part 2 |
-| which switch is which (only if not named `mosaic_head`, `mosaic_dock_t<n>`) | `MOSAIC/mosaic.cfg`, section 6 Part 2 |
-| `[toolchanger]` | `MOSAIC/mosaic.cfg`, section 4 |
-| Nudge probe and Z switch | `MOSAIC/mosaic.cfg`, section 3 (MOSAIC's own equipment) |
+| `[gcode_button ...]` carriage and dock switches | A: your board file. B: `vrtx.cfg`, section 6 Part 1 |
+| `[tool Tn]` | `VRTX/vrtx.cfg`, section 5 Part 2 |
+| which switch is which (only if not named `vrtx_head`, `vrtx_dock_t<n>`) | `VRTX/vrtx.cfg`, section 6 Part 2 |
+| `[toolchanger]` | `VRTX/vrtx.cfg`, section 4 |
+| Nudge probe and Z switch | `VRTX/vrtx.cfg`, section 3 (VRTX's own equipment) |
 
-The `[tool Tn]` sections stay in `mosaic.cfg` because MOSAIC's `T0` ... `T9` commands have to load before them.
+The `[tool Tn]` sections stay in `vrtx.cfg` because VRTX's `T0` ... `T9` commands have to load before them.
 
 ## Example A: every tool is a full toolhead
 
@@ -84,7 +84,7 @@ press_gcode:
 ```
 
 ```
-# MOSAIC/mosaic.cfg, section 5
+# VRTX/vrtx.cfg, section 5
 [tool T0]
 tool_number: 0
 extruder: extruder
@@ -95,8 +95,8 @@ tool_number: 1
 extruder: extruder1
 fan: fan_generic t1_part_fan
 
-# MOSAIC/mosaic.cfg, section 6
-[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+# VRTX/vrtx.cfg, section 6
+[gcode_macro _VRTX_TOOLS_SETTINGS]
 variable_dock_switches: 't0_dock, t1_dock'
 ```
 
@@ -147,7 +147,7 @@ heater_temp: 50.0
 pin: ^...
 press_gcode:
 release_gcode:
-    MOSAIC_DOCK_HEAD_RELEASED
+    VRTX_DOCK_HEAD_RELEASED
 
 [gcode_button dock_0]
 pin: ^toolbox:...
@@ -159,11 +159,11 @@ press_gcode:
 ```
 
 ```
-# MOSAIC/mosaic.cfg, section 2: the shared motor
-[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+# VRTX/vrtx.cfg, section 2: the shared motor
+[gcode_macro _VRTX_TOOLS_SETTINGS]
 variable_motor: 'shared_drive'
 
-# MOSAIC/mosaic.cfg, section 5
+# VRTX/vrtx.cfg, section 5
 [tool T0]
 tool_number: 0
 extruder: extruder
@@ -175,13 +175,13 @@ tool_number: 1
 extruder: extruder1
 params_pressure_advance: 0.062
 
-# MOSAIC/mosaic.cfg, section 6
-[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+# VRTX/vrtx.cfg, section 6
+[gcode_macro _VRTX_TOOLS_SETTINGS]
 variable_head_switch: 'carriage_switch'
 variable_dock_switches: 'dock_0, dock_1'
 ```
 
-The `after_change_gcode` hook in section 4 (`MOSAIC_AFTER_CHANGE`) hands the motor to the mounted tool and sets that tool's
+The `after_change_gcode` hook in section 4 (`VRTX_AFTER_CHANGE`) hands the motor to the mounted tool and sets that tool's
 pressure advance. You do not write the `SYNC_EXTRUDER_MOTION` line yourself.
 
 **Where the pressure advance goes.** Klipper keeps pressure advance on the motor, not on the heater-only `[extruderN]`
@@ -193,12 +193,12 @@ so each tool needs its own and has to set it when it is mounted:
 - `params_rotation_distance` in `[tool Tn]`: the same for the rotation distance, for tools with a different hotend
   drive ratio or filament. Left out = not touched.
 - `SET_PRESSURE_ADVANCE ADVANCE=...` typed in the console, or sent by a slicer, has no `EXTRUDER=` and acts on the
-  active extruder, which is heater-only here. Include `core/mosaic_shared_extruder.cfg` in section 1 and it is sent to
+  active extruder, which is heater-only here. Include `core/vrtx_shared_extruder.cfg` in section 1 and it is sent to
   the motor named in `variable_motor` instead (a command with its own `EXTRUDER=` is passed on unchanged). Klipper
   allows only one `SET_PRESSURE_ADVANCE` macro, so do not use this file together with one of your own.
   A value set that way lasts until the next tool change, when the tool's own `params_` value is set again.
 - For calibrating the pressure advance with the usual tower, mount the tool, set the line in `[tool Tn]`, then run
-  `MOSAIC_AFTER_CHANGE T=<n>` (or just change tools) so the printer has the same value the print will use.
+  `VRTX_AFTER_CHANGE T=<n>` (or just change tools) so the printer has the same value the print will use.
 
 ## Example C: the shared motor is the `[extruder]` stepper
 
@@ -229,59 +229,59 @@ control: pid
 ```
 
 ```
-# MOSAIC/mosaic.cfg, section 2
-[gcode_macro _MOSAIC_TOOLS_SETTINGS]
+# VRTX/vrtx.cfg, section 2
+[gcode_macro _VRTX_TOOLS_SETTINGS]
 variable_motor: 'extruder'
 ```
 
-The tools and the `params_` lines are the same as in example B. `MOSAIC_AFTER_CHANGE` runs
+The tools and the `params_` lines are the same as in example B. `VRTX_AFTER_CHANGE` runs
 `SYNC_EXTRUDER_MOTION EXTRUDER=extruder MOTION_QUEUE=<tool's extruder>` for every tool, T0 included, so after T1 the
 motor goes back to T0's own queue. Pressure advance goes on `extruder` here, which is what the plain
 `SET_PRESSURE_ADVANCE` already does while T0 is active, but not while T1 is: use the optional
-`mosaic_shared_extruder.cfg` or the `params_` lines.
+`vrtx_shared_extruder.cfg` or the `params_` lines.
 
 If your printer has a different arrangement (every tool with its own motor, or a motor that is moved by a macro of
-your own), leave `variable_motor` empty and MOSAIC does nothing with the extruder motor.
+your own), leave `variable_motor` empty and VRTX does nothing with the extruder motor.
 
 ## Printing with a shared motor
 
 - **Retract before the change, prime after.** A hotend that is put away with the filament still pushed into it oozes,
   and the new tool starts with an empty nozzle. `variable_retract` (section 2) pulls the filament back on the tool that
   leaves and pushes it forward again when that tool is mounted, `retract_speed` / `unretract_speed` set the speeds.
-  It happens during a print only, or by hand with `MOSAIC_RETRACT` / `MOSAIC_PRIME` and `FORCE=1`. The push-back waits
+  It happens during a print only, or by hand with `VRTX_RETRACT` / `VRTX_PRIME` and `FORCE=1`. The push-back waits
   for the tool's heater to reach its target (`prime_wait`); with the heater off nothing is pushed and the retract stays
-  pending, a later `MOSAIC_PRIME` (a print start can call it after heating the tool) does it. Set the slicer's tool change retraction to 0, or the filament is
+  pending, a later `VRTX_PRIME` (a print start can call it after heating the tool) does it. Set the slicer's tool change retraction to 0, or the filament is
   pulled twice.
 - **Print start and end.** In `PRINT_START`, heat and mount the first tool with `T<n>` as always, then call
-  `MOSAIC_REQUIRE_TOOL T=<n>`: when the change failed the print is paused (see docking.md, "When a change fails during a
+  `VRTX_REQUIRE_TOOL T=<n>`: when the change failed the print is paused (see docking.md, "When a change fails during a
   print"), but a macro that is already running carries on, and this stops it with an error. If the first tool is already on
-  the carriage no change happens and nothing is primed: call `MOSAIC_PRIME T=<n>` yourself after heating it. At the end of the
-  print `MOSAIC_TOOLS_OFF RETRACT=1` pulls the filament of the mounted tool back and switches every heater off. The
+  the carriage no change happens and nothing is primed: call `VRTX_PRIME T=<n>` yourself after heating it. At the end of the
+  print `VRTX_TOOLS_OFF RETRACT=1` pulls the filament of the mounted tool back and switches every heater off. The
   tools in their docks were retracted when they were put away.
 - **Pending retracts are saved.** Which tool is retracted by how much is written to `[save_variables]`
   (`t<N>_retracted`) and read back when Klipper starts, so a restart or a cancelled print does not lose it. The next
-  time the tool is mounted in a print it is pushed forward. Outside a print: `MOSAIC_PRIME T=<n> FORCE=1`. It costs
+  time the tool is mounted in a print it is pushed forward. Outside a print: `VRTX_PRIME T=<n> FORCE=1`. It costs
   two small writes of the variables file per tool change.
-- **Prime over a brush, and the first prime.** `MOSAIC_PRIME` pushes the filament back where the nozzle is, which after
+- **Prime over a brush, and the first prime.** `VRTX_PRIME` pushes the filament back where the nozzle is, which after
   a change is on the print (the changer has already moved there). Where that is not wanted, set `variable_prime_macro` to a
   macro of yours: it is called as `MY_MACRO T=<tool> LENGTH=<mm> SPEED=<mm/s>` once the tool is hot, and has to move to
   the brush or bucket, push `LENGTH` mm, wipe and come back. It runs inside the change, so klipper-toolchanger moves to
-  the print position afterwards by itself. After a failed change, `MOSAIC_RESUME` runs it while the print is still
+  the print position afterwards by itself. After a failed change, `VRTX_RESUME` runs it while the print is still
   paused and `RESUME` moves back to the saved position, so it never has to come back on its own either. With it, `variable_first_prime` adds that many mm the first time each
   tool is used in a print (a nozzle that has been standing empty puts down a tower with nothing in it). Call
-  `MOSAIC_PRIMED_RESET` at the start of `PRINT_START` so every print starts the list again (it is also cleared by `MOSAIC_TOOLS_OFF` at the end of a print and when a prime is asked for while nothing is printing, and `MOSAIC_CHECK` reminds you if your `PRINT_START` does not call it). `MOSAIC_CHECK` tells you
+  `VRTX_PRIMED_RESET` at the start of `PRINT_START` so every print starts the list again (it is also cleared by `VRTX_TOOLS_OFF` at the end of a print and when a prime is asked for while nothing is printing, and `VRTX_CHECK` reminds you if your `PRINT_START` does not call it). `VRTX_CHECK` tells you
   if the macro does not exist.
-- **M109 wait.** With `mosaic_tool_heaters.cfg`, `variable_wait_below` / `variable_wait_above` make `M109 T.. S..` wait
+- **M109 wait.** With `vrtx_tool_heaters.cfg`, `variable_wait_below` / `variable_wait_above` make `M109 T.. S..` wait
   for a window around the target (the usual `TEMPERATURE_WAIT`) instead of Klipper's slower "flat for a few seconds" wait,
   which matters when every tool change waits for the temperature.
 
 ## Switches
 
-The switch names are read from `_MOSAIC_TOOLS_SETTINGS`:
+The switch names are read from `_VRTX_TOOLS_SETTINGS`:
 
-- `variable_head_switch`: the name of the carriage switch's `[gcode_button]`. Default `mosaic_head`.
+- `variable_head_switch`: the name of the carriage switch's `[gcode_button]`. Default `vrtx_head`.
 - `variable_dock_switches`: the dock switches in tool order T0, T1, T2 ..., separated by commas. An empty or missing
-  entry means `mosaic_dock_t<n>`, so `'dock_0, , dock_2'` gives T1 the default name.
+  entry means `vrtx_dock_t<n>`, so `'dock_0, , dock_2'` gives T1 the default name.
 
-A switch that does not exist is skipped. `MOSAIC_DOCK_SWITCHES` prints every switch by the name MOSAIC looks for, so
+A switch that does not exist is skipped. `VRTX_DOCK_SWITCHES` prints every switch by the name VRTX looks for, so
 it shows straight away if a name is wrong. More in [docking.md](docking.md), "Tool switches".
