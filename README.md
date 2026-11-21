@@ -115,18 +115,24 @@ cd VRTX
 ./install.sh
 ```
 
-It asks two questions first (only on a new install; it never asks again, and never touches an existing `vrtx.cfg`):
+It asks three questions first (only on a new install; it never asks again, and never touches an existing `vrtx.cfg`):
 
 ```
 Which calibration method do you prefer, Nudge or Visual? 1 for Nudge 2 for Camera
+What kind of tool changer is it?
+  1  Full toolheads: every tool has its own extruder motor and part cooling fan
+  2  Hotend swapper: a tool is only a hotend, thermistor and hotend fan;
+     the extruder motor and part cooling fans stay on the carriage
 How many tools are you using? 1-10
 ```
 
 The answers decide what your `vrtx.cfg` looks like. The method you pick is switched on; the other one is in the file
 too, switched off, so you can change later (see "Changing the calibration method"). The tools, dock switches and dock
 sections and the T commands (so that Mainsail shows exactly your tool buttons) are written for as many tools as you
-gave. To skip the questions: `CALIBRATION=nudge|camera TOOLS=4 ./install.sh`. Without a terminal and without those
-variables you get the Nudge method and ten tools.
+gave. With full toolheads every tool gets its own part cooling fan (`fan: fan_generic tN_part_fan`); with a hotend
+swapper the tools get none, because the part cooling fans are the one `[fan]` of your carriage, and section 5 shows only
+the hotend swapper layout. To skip the questions: `CALIBRATION=nudge|camera CHANGER=full|hotend TOOLS=4 ./install.sh`.
+Without a terminal and without those variables you get the Nudge method, full toolheads and ten tools.
 
 It then does three things:
 

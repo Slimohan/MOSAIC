@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Builds your vrtx.cfg from the template (config/vrtx.cfg).
 
-    build_config.py [--calibration nudge|camera] [--tools N] [--template FILE] [-o FILE]
+    build_config.py [--calibration nudge|camera] [--changer full|hotend] [--tools N] [--template FILE] [-o FILE]
 
-The installer runs this once, with your answers to its two questions. The template holds
+The installer runs this once, with your answers to its three questions. The template holds
 everything; the build only switches parts of it on or off:
 
   * calibration blocks:   #@@ begin nudge  ...  #@@ end nudge   (same for camera)
@@ -13,13 +13,17 @@ everything; the build only switches parts of it on or off:
   * #@@ each tool / dockswitch / dockmacro ... #@@ end each
         The lines in between are written once for every tool (T0 ... T<N-1>),
         {n} is the tool number, {extruder} the name of its [extruder] section.
+  * #@@ if full / #@@ if hotend ... #@@ endif
+        The lines in between are kept only for that kind of tool changer: full (every tool
+        is a full toolhead with its own motor and part fan) or hotend (only the hotend is
+        swapped; motor and part cooling fans stay on the carriage).
   * #@@ note ...   a line for readers of the template, left out of your file.
   * #@@ tcommands
         The include of the T commands: all ten, or only T0 ... T<N-1> when you have
         fewer tools, so that Mainsail shows only the tool buttons you need.
 
 The first line of the result records the answers, so a later template can be built the
-same way:  # VRTX-INSTALL: calibration=nudge tools=4
+same way:  # VRTX-INSTALL: calibration=nudge tools=4 changer=hotend
 Standard library only.
 """
 import argparse
@@ -30,7 +34,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 METHODS = ("nudge", "camera")
 TITLES = {"nudge": "NUDGE", "camera": "CAMERA"}
-RECORD = re.compile(r"^# VRTX-INSTALL: calibration=(\w+) tools=(\d+)\s*$")
+CHANGERS = ("full", "hotend")
+RECORD = re.compile(r"^# VRTX-INSTALL: calibration=(\w+) tools=(\d+)(?: changer=(\w+))?\s*$")
 
 
 def tcommands(n):
@@ -55,8 +60,28 @@ def tcommands(n):
                max(n, 2) - 1, max(n, 2) - 1, pattern))
 
 
-def build(template, calibration, tools):
-    lines = template.split("\n")
+def keep_changer(lines, changer):
+    """Drop the lines meant for the other kind of tool changer."""
+    out, keep, inside = [], True, False
+    for line in lines:
+        m = re.match(r"^#@@ (if|endif)(?: (\w+))?\s*$", line)
+        if m and m.group(1) == "if":
+            if inside or m.group(2) not in CHANGERS:
+                raise SystemExit("bad marker: " + line)
+            inside, keep = True, m.group(2) == changer
+        elif m:
+            if not inside:
+                raise SystemExit("#@@ endif without #@@ if")
+            inside, keep = False, True
+        elif keep:
+            out.append(line)
+    if inside:
+        raise SystemExit("#@@ if without #@@ endif")
+    return out
+
+
+def build(template, calibration, tools, changer="full"):
+    lines = keep_changer(template.split("\n"), changer)
     out = []
     i = 0
     seen = set()
@@ -120,17 +145,18 @@ def build(template, calibration, tools):
     if seen != set(METHODS):
         raise SystemExit("template lacks a calibration block")
     text = "\n".join(out)
-    return "# VRTX-INSTALL: calibration=%s tools=%d\n%s" % (calibration, tools, text)
+    return "# VRTX-INSTALL: calibration=%s tools=%d changer=%s\n%s" % (calibration, tools, changer, text)
 
 
 def recorded(path):
-    """(calibration, tools) recorded in a built file, or None."""
+    """(calibration, tools, changer) recorded in a built file, or None.
+    Files from before the changer question are full toolheads, as the template was then."""
     try:
         with open(path) as f:
             for _ in range(5):
                 m = RECORD.match(f.readline())
                 if m:
-                    return m.group(1), int(m.group(2))
+                    return m.group(1), int(m.group(2)), m.group(3) or "full"
     except OSError:
         pass
     return None
@@ -139,20 +165,21 @@ def recorded(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--calibration", default="nudge", choices=METHODS)
+    ap.add_argument("--changer", default="full", choices=CHANGERS)
     ap.add_argument("--tools", type=int, default=10)
     ap.add_argument("--template", default=os.path.join(HERE, "vrtx.cfg"))
-    ap.add_argument("--record-of", metavar="FILE", help="print 'calibration tools' recorded in FILE and exit")
+    ap.add_argument("--record-of", metavar="FILE", help="print 'calibration tools changer' recorded in FILE and exit")
     ap.add_argument("-o", "--output")
     a = ap.parse_args()
     if a.record_of:
         r = recorded(a.record_of)
         if r:
-            print("%s %d" % r)
+            print("%s %d %s" % r)
         return
     if not 1 <= a.tools <= 10:
         raise SystemExit("--tools must be between 1 and 10")
     with open(a.template) as f:
-        text = build(f.read(), a.calibration, a.tools)
+        text = build(f.read(), a.calibration, a.tools, a.changer)
     if a.output:
         with open(a.output, "w") as f:
             f.write(text)
