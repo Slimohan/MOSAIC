@@ -1,22 +1,27 @@
-# Shared by install.sh and uninstall.sh: which Klipper instance this is, and
-# what VRTX calls its service, page and update entry on this computer.
+# Shared by install.sh and uninstall.sh: which Klipper instance this is.
+# A KIAUH multi-instance setup keeps each printer in ~/printer_<NAME>_data with
+# its own klipper-<NAME> and moonraker-<NAME> services and Moonraker port, so
+# VRTX gets its own service, page port and page address per instance:
 #
-# The first printer on a computer gets the plain names: service vrtx, page
-# /vrtx/ on port 8099, [update_manager vrtx]. Only when another printer on the
-# same computer already has them (a KIAUH multi-instance setup, each printer in
-# ~/printer_<NAME>_data with its own Moonraker port) does a printer get its own:
-# vrtx-<NAME>, /vrtx-<NAME>/, port 8099 + (Moonraker port - 7125).
+#   ~/printer_data/config                 -> vrtx,           /vrtx/,           port 8099
+#   ~/printer_PICOTRAIN_data/config       -> vrtx-PICOTRAIN, /vrtx-PICOTRAIN/, port 8099 + (Moonraker port - 7125)
 #
 # Override with INSTANCE=..., MOONRAKER_PORT=..., PAGE_PORT=...
 datadir=$(dirname "$conf")
-finst=""
-case "$(basename "$datadir")" in
-    printer_data) ;;
-    printer_*_data) finst=$(basename "$datadir"); finst=${finst#printer_}; finst=${finst%_data} ;;
+inst="${INSTANCE:-}"
+if [ -z "$inst" ]; then
+    case "$(basename "$datadir")" in
+        printer_data) ;;
+        printer_*_data) inst=$(basename "$datadir"); inst=${inst#printer_}; inst=${inst%_data} ;;
+    esac
+fi
+case "$inst" in
+    *[!A-Za-z0-9_-]*) echo "instance name '$inst' has characters other than letters, digits, - and _ - set INSTANCE=..."; exit 1 ;;
 esac
-msuf=""
-[ -n "$finst" ] && msuf="-$finst"
-msvc="moonraker$msuf"
+suf=""
+[ -n "$inst" ] && suf="-$inst"
+name="vrtx$suf"
+msvc="moonraker$suf"
 mport="${MOONRAKER_PORT:-$(python3 - "$conf/moonraker.conf" <<'PY'
 import configparser, sys
 cp = configparser.ConfigParser(strict=False, interpolation=None, inline_comment_prefixes=("#", ";"))
@@ -27,18 +32,6 @@ except Exception:
     print(7125)
 PY
 )}"
-# Plain names unless another printer on this computer already has them.
-inst="${INSTANCE:-}"
-if [ -z "$inst" ] && [ -n "$finst" ] && [ -f /etc/systemd/system/vrtx.service ] \
-   && ! grep -q "127.0.0.1:$mport\b" /etc/systemd/system/vrtx.service; then
-    inst="$finst"
-fi
-case "$inst" in
-    *[!A-Za-z0-9_-]*) echo "instance name '$inst' has characters other than letters, digits, - and _ - set INSTANCE=..."; exit 1 ;;
-esac
-suf=""
-[ -n "$inst" ] && suf="-$inst"
-name="vrtx$suf"
 if [ -n "$PAGE_PORT" ]; then
     pport="$PAGE_PORT"
 elif [ -z "$inst" ]; then

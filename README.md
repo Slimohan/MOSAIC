@@ -148,10 +148,12 @@ printer that has a tool changer, with that printer's config folder:
 CONF=~/printer_<NAME>_data/config ./install.sh
 ```
 
-It reads Moonraker's port from that printer's `moonraker.conf`. The first printer on the computer gets the plain
-names: page service `vrtx`, page at `http://<computer>/vrtx/` (also in Mainsail's sidebar as **VRTX**) and update panel
-entry `[update_manager vrtx]`. Only a second printer on the same computer gets names of its own, made from its folder
-name, so the two don't clash. All printers share the one download in `~/VRTX`.
+It reads Moonraker's port from that printer's `moonraker.conf` and gives the printer its own page service
+(`vrtx-<NAME>`), page port (8099 plus the distance of its Moonraker port from 7125, so 8101 for port 7127) and page
+address (`http://<computer>/vrtx-<NAME>/`), so printers on the same computer never clash. What you see stays plain:
+the update panel entry is `[update_manager vrtx]` and the Mainsail sidebar entry is **VRTX** for every printer.
+All printers share the one download in `~/VRTX`. A single `vrtx` service that was edited by hand to talk to the
+printer's Moonraker is found and replaced.
 `INSTANCE=`, `MOONRAKER_PORT=` and `PAGE_PORT=` override what the installer works out. Uninstall the same way:
 `CONF=~/printer_<NAME>_data/config ./uninstall.sh`.
 
