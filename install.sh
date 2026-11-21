@@ -25,9 +25,9 @@
 #
 # Several printers on one computer (KIAUH instances, ~/printer_<NAME>_data):
 #   CONF=~/printer_<NAME>_data/config ./install.sh
-# reads Moonraker's port from that instance's moonraker.conf and gives the
-# instance its own page service (vrtx-<NAME>), page port and address
-# (http://<computer>/vrtx-<NAME>/). Run it once per instance.
+# reads Moonraker's port from that instance's moonraker.conf. The first printer
+# gets the plain names (vrtx, /vrtx/, port 8099); only a second printer on the
+# same computer gets its own (vrtx-<NAME>, /vrtx-<NAME>/). Run it once per printer.
 # Running it again is safe: every step checks what is already there.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)

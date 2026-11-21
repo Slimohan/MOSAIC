@@ -145,16 +145,15 @@ If your config folder is not `~/printer_data/config`: `CONF=/path/to/config ./in
 printer that has a tool changer, with that printer's config folder:
 
 ```
-CONF=~/printer_PICOTRAIN_data/config ./install.sh
+CONF=~/printer_<NAME>_data/config ./install.sh
 ```
 
-It reads Moonraker's port from that printer's `moonraker.conf` and gives the printer its own page service
-(`vrtx-PICOTRAIN`), page port (8099 plus the distance of its Moonraker port from 7125, so 8101 for port 7127),
-page address (`http://<computer>/vrtx-PICOTRAIN/`, also in that printer's Mainsail sidebar) and update panel entry
-(`[update_manager vrtx-PICOTRAIN]`, which restarts that printer's Klipper). All printers share the one download in
-`~/VRTX`. A single `vrtx` service that was edited by hand to talk to the printer's Moonraker is found and replaced.
+It reads Moonraker's port from that printer's `moonraker.conf`. The first printer on the computer gets the plain
+names: page service `vrtx`, page at `http://<computer>/vrtx/` (also in Mainsail's sidebar as **VRTX**) and update panel
+entry `[update_manager vrtx]`. Only a second printer on the same computer gets names of its own, made from its folder
+name, so the two don't clash. All printers share the one download in `~/VRTX`.
 `INSTANCE=`, `MOONRAKER_PORT=` and `PAGE_PORT=` override what the installer works out. Uninstall the same way:
-`CONF=~/printer_PICOTRAIN_data/config ./uninstall.sh`.
+`CONF=~/printer_<NAME>_data/config ./uninstall.sh`.
 
 ### 3. Fill in `vrtx.cfg`
 
