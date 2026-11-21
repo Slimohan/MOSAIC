@@ -160,6 +160,16 @@ If a check fails the change stops with an error that says what the combination m
 
 **At startup.** Klipper starts without knowing which tool is on the carriage, and klipper-toolchanger would assume the carriage is empty. Four seconds after Klipper starts, VRTX reads the switches: a tool on the carriage with exactly one empty dock is that tool, no tool on the carriage with every dock full means an empty carriage, and it tells the changer (`INITIALIZE_TOOLCHANGER`). Anything else (no switches, two empty docks, the carriage and every dock full) is reported and left alone: run `VRTX_RESUME T=<n>` when you know. `variable_auto_init: False` in `_VRTX_TOOLS_SETTINGS` turns it off.
 
+**A tool changed by hand.** klipper-toolchanger knows the mounted tool only from its own changes: a tool taken off the carriage, put on it or swapped by hand leaves it with the old one, and the next change would drop off a tool that is not there. VRTX reads the switches every second. When they have been still for `manual_sync_delay` seconds (2), no change is running and they show something else than the changer has, the change was made by hand (a change by the printer ends with the switches showing the tool the changer has). What happens then is `manual_sync` in `_VRTX_TOOLS_SETTINGS`:
+
+| | not printing | printing or paused |
+|---|---|---|
+| `silent` (default) | the changer follows the switches by itself: it is told the tool on the carriage, with its offsets, motor and spool | the print is paused like after a failed change; **Recover** (`VRTX_RESUME`) follows the switches and mounts the tool the print had again |
+| `next` | a message; the next T command follows the switches first, then does its change | as above |
+| `off` | nothing | nothing |
+
+With `silent` or `next` every T command reads the switches first as well. Switches that do not add up (two empty docks, a tool on the carriage with every dock full) are reported, and a T command is refused until they do. An empty carriage while the changer still has a tool: klipper-toolchanger cannot be told "no tool" without moving, so VRTX resets it with an error message and sets it up from the switches a moment later (a T command that met this has to be sent again). `VRTX_SYNC_TOOL` does the same check by hand, also with `manual_sync: 'off'`. A tool put on by hand may not sit exactly like one the printer picked up: its offsets are the saved ones.
+
 **While printing:** continuous watching is not the job of a dock macro. `VRTX_DOCK_HEAD_RELEASED` (called from the `release_gcode` above) reports and pauses a running print if the carriage switch lets go while a tool is selected and no tool change is running. Give the switch a debounce (`debounce_delay: 0.1`) so vibration does not trigger it.
 
 **Why not klipper-toolchanger's own `detection_pin`?** It is made for one switch per tool, so it tells the tools apart. You have one switch on the carriage, which can only say "a tool is attached", and these macros already know which tool they expect. Leave `detection_pin` out of the `[tool]` sections unless every tool has its own, and then both can be used together.
