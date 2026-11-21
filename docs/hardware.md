@@ -1,37 +1,34 @@
 # Your hardware
 
-VRTX works with any board. It contains no board of its own: the heaters, thermistors, fans, motors and switches of
-your tools are set up in sections 5 and 6 of `VRTX/vrtx.cfg`, and VRTX refers to them by name. You have two
-ways to set them up. Pick one per printer.
+VRTX works with any board. It contains no board of its own and defines no hardware: the heaters, thermistors,
+hotend fans and motors of your tools are set up in the config file of the board they are wired to, and the
+`[tool Tn]` sections in `VRTX/vrtx.cfg` refer to them by name.
 
-**A. A file of your own.** A board file next to `printer.cfg` (from your tool changer, or one you write from the
-examples below), pulled in by one line in section 5 of `vrtx.cfg`:
+That board file sits next to `printer.cfg` (from your tool changer, or one you write from the examples below) and is
+pulled in either by `printer.cfg` before `[include VRTX/vrtx.cfg]`, or by one line in section 5 of `vrtx.cfg`:
 
 ```
 VRTX/vrtx.cfg   section 5:   [include ../my_tools.cfg]
 my_tools.cfg                     yours, next to printer.cfg; VRTX never touches it
 ```
 
-The `../` is there because the include is relative to the `VRTX` folder. (Including the file in `printer.cfg`
-before `[include VRTX/vrtx.cfg]` works as well.) The name of the file is up to you, and so are the names of the
-sections in it.
+The `../` is there because the include is relative to the `VRTX` folder. The name of the file is up to you, and so
+are the names of the sections in it. The carriage and dock switches can go in that file as well, or in section 6
+of `vrtx.cfg`, which has templates for them.
 
-**B. Everything in `vrtx.cfg`.** The examples below are what you would put in sections 5 and 6 (Part 1 of each),
-without a separate file. The templates in the file are the same, with `...` where your pins go.
-
-Either way, one toolboard per tool, an expansion board for all tools, or everything on the mainboard: the
+One toolboard per tool, an expansion board for all tools, or everything on the mainboard: the
 `[tool Tn]` sections look the same.
 
 What goes where:
 
 | What | Where |
 |---|---|
-| `[mcu ...]` of the tool board(s) | your board file (A), or in `printer.cfg` |
-| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | A: your board file. B: `vrtx.cfg`, section 5 Part 1 |
+| `[mcu ...]` of the tool board(s) | your board file, or in `printer.cfg` |
+| `[extruder]` ... `[extruder9]` or `[heater_generic ...]` (heater, thermistor, motor if any) | your board file |
 | `[extruder_stepper ...]` (a shared extruder motor) | same |
 | `[heater_fan ...]`, `[fan_generic ...]` | same |
-| `[gcode_button ...]` carriage and dock switches | A: your board file. B: `vrtx.cfg`, section 6 Part 1 |
-| `[tool Tn]` | `VRTX/vrtx.cfg`, section 5 Part 2 |
+| `[gcode_button ...]` carriage and dock switches | your board file, or `vrtx.cfg` section 6 Part 1 |
+| `[tool Tn]` | `VRTX/vrtx.cfg`, section 5 |
 | which switch is which (only if not named `vrtx_head`, `vrtx_dock_t<n>`) | `VRTX/vrtx.cfg`, section 6 Part 2 |
 | `[toolchanger]` | `VRTX/vrtx.cfg`, section 4 |
 | Nudge probe and Z switch | `VRTX/vrtx.cfg`, section 3 (VRTX's own equipment) |
@@ -103,7 +100,10 @@ variable_dock_switches: 't0_dock, t1_dock'
 ## Example B: hotend swapper with one shared extruder motor
 
 Every tool has its own heater, thermistor and hotend fan; only the hotend is swapped and one extruder motor feeds
-whichever tool is mounted. Each tool is a heater-only `[extruder]` (no `step_pin`), and the motor is an
+whichever tool is mounted. The part cooling fans stay on the carriage too: they are the printer's one `[fan]` in the
+carriage board's file (two fans on two pins: a `[multi_pin]` with both, and `pin: multi_pin:<name>` in `[fan]`), and
+the `[tool Tn]` sections have no `fan:` line. Install VRTX with "hotend swapper" as the answer to the tool changer
+question and the tools are written that way. Each tool is a heater-only `[extruder]` (no `step_pin`), and the motor is an
 `[extruder_stepper]`.
 
 ```
